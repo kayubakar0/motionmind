@@ -1,0 +1,15 @@
+node_modules/
+dist/
+.turbo/
+*.log
+.env
+.env.*
+!.env.example
+server/uploads/
+server/drizzle/meta/
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.local

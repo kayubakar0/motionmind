@@ -1,0 +1,24 @@
+{
+  "name": "motionmind",
+  "private": true,
+  "packageManager": "bun@1.4.2",
+  "workspaces": [
+    "client",
+    "server",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:client": "turbo run dev --filter=client",
+    "dev:server": "turbo run dev --filter=server",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "type-check": "turbo run type-check",
+    "db:generate": "bun run --cwd server db:generate",
+    "db:push": "bun run --cwd server db:push",
+    "db:seed": "bun run --cwd server db:seed"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.4"
+  }
+}

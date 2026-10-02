@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Sora:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Chakra Petch", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-bg: #090b0a;
+  --color-surface: #101312;
+  --color-surface2: #171b19;
+  --color-line: #242a27;
+  --color-line2: #2f3733;
+  --color-volt: #c9f24b;
+  --color-volt-deep: #8fb62e;
+  --color-aqua: #4ad9f0;
+  --color-amber2: #f0b64a;
+  --color-coral: #f0675a;
+  --color-ink: #e9efe9;
+  --color-mute: #8b968f;
+  --color-dim: #5c6660;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-bg text-ink font-sans antialiased;
+  background-image:
+    radial-gradient(1100px 500px at 85% -10%, rgba(201, 242, 75, 0.055), transparent 60%),
+    radial-gradient(900px 420px at -10% 110%, rgba(74, 217, 240, 0.04), transparent 60%),
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: auto, auto, 44px 44px, 44px 44px;
+  min-height: 100vh;
+}
+
+::selection {
+  background: rgba(201, 242, 75, 0.25);
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a312d;
+  border-radius: 8px;
+  border: 2px solid #090b0a;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(201, 242, 75, 0.35);
+  }
+  50% {
+    box-shadow: 0 0 24px 2px rgba(201, 242, 75, 0.18);
+  }
+}
+
+@keyframes ticker {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 40px 0;
+  }
+}
+
+.rise {
+  animation: rise 0.55s cubic-bezier(0.22, 0.9, 0.3, 1) both;
+}
+.d1 { animation-delay: 0.05s; }
+.d2 { animation-delay: 0.12s; }
+.d3 { animation-delay: 0.19s; }
+.d4 { animation-delay: 0.26s; }
+.d5 { animation-delay: 0.33s; }
+.d6 { animation-delay: 0.4s; }
+.d7 { animation-delay: 0.47s; }
+.d8 { animation-delay: 0.54s; }
+
+.pulse-glow {
+  animation: pulse-glow 2.6s ease-in-out infinite;
+}
+
+.card {
+  @apply rounded-2xl border border-line bg-surface;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.label-tech {
+  @apply font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-mute;
+}
+
+.hazard {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(201, 242, 75, 0.12) 0 10px,
+    transparent 10px 20px
+  );
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}

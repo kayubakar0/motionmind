@@ -38,7 +38,7 @@ const METRICS_TABS = [
 export default function ActivityDetailPage() {
   const { id } = useParams();
   const qc = useQueryClient();
-  const [tab, setTab] = useState("watts");
+  const [tab, setTab] = useState("heartrate");
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const [pinnedIdx, setPinnedIdx] = useState<number | null>(null);
   const activeIdx = hoverIdx ?? pinnedIdx;
@@ -46,6 +46,12 @@ export default function ActivityDetailPage() {
     queryKey: ["activity", id],
     queryFn: () => api<DetailResponse>(`/activities/${id}?withStreams=1`),
   });
+
+  const streamRec = (a?.streams ?? null) as unknown as Record<string, number[] | null | undefined> | null;
+  const availableTabs = useMemo(
+    () => (streamRec ? METRICS_TABS.filter((t) => streamRec[t.key]?.length) : []),
+    [streamRec]
+  );
 
   const geoProfile = useMemo(
     () =>
@@ -69,6 +75,12 @@ export default function ActivityDetailPage() {
     setPinnedIdx(null);
   }, [a?.id]);
 
+  useEffect(() => {
+    if (availableTabs.length > 0 && !availableTabs.some((t) => t.key === tab)) {
+      setTab(availableTabs[0].key);
+    }
+  }, [availableTabs, tab]);
+
   const profileStats = useMemo(() => {
     if (!geoProfile) return null;
     const maxGrade = Math.max(...geoProfile.grade.map((g) => Math.abs(g)));
@@ -87,12 +99,6 @@ export default function ActivityDetailPage() {
   if (isLoading || !a) {
     return <div className="p-10 text-center text-sm text-dim">Memuat aktivitas…</div>;
   }
-
-  const has = (k: string) => {
-    const s = a.streams as unknown as Record<string, number[] | null | undefined> | null;
-    return Boolean(s?.[k]?.length);
-  };
-  const availableTabs = METRICS_TABS.filter((t) => has(t.key));
 
   return (
     <>

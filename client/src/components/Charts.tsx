@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import {
   Area,
   Bar,
@@ -100,16 +101,76 @@ const STREAM_META: Record<string, { color: string; name: string; unit: string }>
   cadence: { color: "#a78bfa", name: "Kadens", unit: "rpm" },
 };
 
-export function StreamChart({ series, metric, height = 260 }: { series: StreamSeries; metric: string; height?: number }) {
-  const meta = STREAM_META[metric];
-  if (!meta) return null;
-  const values = (series as unknown as Record<string, number[] | null | undefined>)[metric] ?? null;
-  if (!values || values.length === 0) return null;
+const STREAM_MAX_POINTS = 512;
 
-  const data = series.time.map((t, i) => ({ t, v: values[i] ?? null }));
+type StreamPoint = { t: number; v: number | null };
+
+function decimateStream(time: number[], values: Array<number | null | undefined>): StreamPoint[] {
+  const n = Math.min(time.length, values.length);
+  if (n === 0) return [];
+  if (n <= STREAM_MAX_POINTS) {
+    return values.slice(0, n).map((v, i) => ({ t: time[i], v: v ?? null }));
+  }
+  const bucket = Math.ceil(n / STREAM_MAX_POINTS);
+  const out: StreamPoint[] = [];
+  for (let start = 0; start < n; start += bucket) {
+    const end = Math.min(start + bucket, n);
+    const sv = values[start];
+    if (sv != null) out.push({ t: time[start], v: sv });
+    let minI = -1;
+    let maxI = -1;
+    let minV = Infinity;
+    let maxV = -Infinity;
+    for (let i = start; i < end; i++) {
+      const v = values[i];
+      if (v == null) continue;
+      if (v < minV) {
+        minV = v;
+        minI = i;
+      }
+      if (v > maxV) {
+        maxV = v;
+        maxI = i;
+      }
+    }
+    if (minI < 0) {
+      if (out.length === 0 || out[out.length - 1].v !== null) out.push({ t: time[start], v: null });
+      continue;
+    }
+    const a = Math.min(minI, maxI);
+    const b = Math.max(minI, maxI);
+    if (a === b) {
+      out.push({ t: time[minI], v: minV });
+    } else {
+      if (out.length === 0 || out[out.length - 1].t !== time[a]) {
+        out.push({ t: time[a], v: values[a] ?? null });
+      }
+      out.push({ t: time[b], v: values[b] ?? null });
+    }
+  }
+  return out;
+}
+
+export const StreamChart = memo(function StreamChart({
+  series,
+  metric,
+  height = 260,
+}: {
+  series: StreamSeries;
+  metric: string;
+  height?: number;
+}) {
+  const meta = STREAM_META[metric];
+  const data = useMemo<StreamPoint[] | null>(() => {
+    const values = (series as unknown as Record<string, number[] | null | undefined>)[metric] ?? null;
+    if (!values || values.length === 0 || series.time.length === 0) return null;
+    return decimateStream(series.time, values);
+  }, [series, metric]);
+
+  if (!meta || !data) return null;
 
   return (
-    <ResponsiveContainer width="100%" height={height}>
+    <ResponsiveContainer width="100%" height={height} debounce={100}>
       <LineChart data={data} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
         <CartesianGrid stroke={GRID} vertical={false} />
         <XAxis
@@ -130,8 +191,8 @@ export function StreamChart({ series, metric, height = 260 }: { series: StreamSe
           labelFormatter={(t: number) => `Menit ${Math.floor(Number(t) / 60)}:${String(Math.floor(Number(t) % 60)).padStart(2, "0")}`}
           formatter={(v: number) => [`${v?.toFixed?.(1) ?? v} ${meta.unit}`, meta.name]}
         />
-        <Line type="monotone" dataKey="v" name={meta.name} stroke={meta.color} strokeWidth={1.8} dot={false} />
+        <Line type="monotone" dataKey="v" name={meta.name} stroke={meta.color} strokeWidth={1.8} dot={false} isAnimationActive={false} />
       </LineChart>
     </ResponsiveContainer>
   );
-}
+});

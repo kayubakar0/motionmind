@@ -2,10 +2,10 @@ import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, MapPinned, CalendarClock, Trash2, Sparkles, Route as RouteIcon, RefreshCw, CheckCircle2, XCircle, Pencil } from "lucide-react";
+
 import type { RecommendationDTO, SportDTO, TargetDTO } from "shared";
 import { api, apiUpload } from "../lib/api";
 import { Badge, Button, Card, ErrorText, Field, Input, Modal, PageHeader, Select, Textarea, cx } from "../components/ui";
-import RouteMap from "../components/RouteMap";
 import SportIcon from "../components/SportIcon";
 import { daysUntil, fmtDate, fmtDistance, fmtDurationShort, fmtElevation, fmtNum } from "../lib/format";
 
@@ -121,18 +121,6 @@ export default function TargetsPage() {
             const sport = sports?.find((s) => s.id === t.sportId);
             return (
               <Card key={t.id} className={cx("rise overflow-hidden", `d${Math.min(i + 1, 8)}`)}>
-                {t.routeStats?.points && t.routeStats.points.length > 1 && (
-                  <div className="relative">
-                    <RouteMap points={t.routeStats.points} height={160} interactive={false} showKmMarkers={false} />
-                    <button
-                      onClick={() => navigate(`/targets/${t.id}/analysis`)}
-                      className="absolute right-2 top-2 z-[500] rounded-lg border border-line2 bg-surface/90 p-1.5 text-mute backdrop-blur transition-colors hover:text-volt"
-                      title="Buka analisis rute"
-                    >
-                      <RouteIcon size={14} />
-                    </button>
-                  </div>
-                )}
                 <div className="p-5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2.5">

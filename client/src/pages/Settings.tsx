@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw, Link2, Unlink, Save, ExternalLink } from "lucide-react";
+import { RefreshCw, Link2, Unlink, Save, ExternalLink, LogOut } from "lucide-react";
 import type { SportDTO, UserProfileDTO } from "shared";
 import { api } from "../lib/api";
 import { Badge, Button, Card, ErrorText, Field, Input, PageHeader, Select, cx } from "../components/ui";
@@ -24,6 +25,7 @@ interface OnbStatus {
 
 export default function SettingsPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const { data: me } = useQuery({ queryKey: ["me"], queryFn: () => api<UserProfileDTO>("/auth/me") });
   const { data: status } = useQuery({ queryKey: ["onboarding"], queryFn: () => api<OnbStatus>("/onboarding/status") });
   const { data: strava } = useQuery({ queryKey: ["strava"], queryFn: () => api<{ connected: boolean; lastSyncAt: string | null }>("/strava/status") });
@@ -38,6 +40,15 @@ export default function SettingsPage() {
   const [experience, setExperience] = useState("beginner");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  async function logout() {
+    try {
+      await api("/auth/logout", { method: "POST" });
+    } finally {
+      qc.clear();
+      navigate("/login", { replace: true });
+    }
+  }
 
   useEffect(() => {
     if (status) {
@@ -261,6 +272,11 @@ export default function SettingsPage() {
               <span className="text-dim">Role: </span>
               <Badge tone={me.role === "admin" ? "aqua" : "neutral"}>{me.role}</Badge>
             </div>
+          </div>
+          <div className="mt-4 border-t border-line pt-4">
+            <Button variant="danger" onClick={logout}>
+              <LogOut size={13} /> Keluar dari akun
+            </Button>
           </div>
         </Card>
       )}

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { Check, X, RefreshCw, CalendarDays, HeartPulse, Info } from "lucide-react";
+import { Check, X, RefreshCw, CalendarDays, HeartPulse, Info, PencilLine } from "lucide-react";
 import type { PlanSessionDTO, TrainingPlanDTO } from "shared";
 import { api } from "../lib/api";
 import { Badge, Button, Card, EmptyState, ErrorText, Field, Modal, PageHeader, Select, Textarea, cx } from "../components/ui";
@@ -117,7 +117,7 @@ export default function PlanPage() {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card className="rise d1 p-4">
           <div className="label-tech">Progres</div>
           <div className="num mt-1 text-2xl font-semibold text-volt">{progress}%</div>
@@ -163,7 +163,7 @@ export default function PlanPage() {
 
       <div className="mt-4 space-y-4">
         {weeks.map(([weekStart, weekSessions], wi) => (
-          <Card key={weekStart} className={cx("rise p-5", `d${Math.min(wi + 5, 8)}`)}>
+          <Card key={weekStart} className={cx("rise p-3.5 md:p-5", `d${Math.min(wi + 5, 8)}`)}>
             <div className="mb-3 flex items-center justify-between">
               <div className="label-tech">
                 Minggu {fmtDateShort(weekStart)}
@@ -175,73 +175,100 @@ export default function PlanPage() {
               </span>
             </div>
             <div className="space-y-2">
-              {weekSessions.map((s) => (
+              {weekSessions.map((s) => {
+                const ended = s.status === "missed" || s.status === "skipped";
+                return (
                 <div
                   key={s.id}
                   className={cx(
-                    "flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3 transition-colors",
+                    "rounded-xl border px-3 py-3 transition-colors md:flex md:flex-wrap md:items-center md:gap-3 md:px-4",
                     s.status === "completed" && "border-volt/25 bg-volt/5",
                     s.status === "missed" && "border-coral/25 bg-coral/5 opacity-80",
                     s.status === "skipped" && "border-line bg-bg opacity-60",
                     s.status === "planned" && "border-line bg-bg hover:border-line2"
                   )}
                 >
-                  <div className="w-20 shrink-0">
+                  <div className="hidden w-20 shrink-0 md:block">
                     <div className="text-[10px] uppercase tracking-wider text-dim">{dayLabel(s.date)}</div>
                     <div className="num text-[13px] font-semibold">{fmtDateShort(s.date)}</div>
                   </div>
-                  <div
-                    className={cx("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-line", CATEGORY_TONE[s.sportCategory ?? "other"])}
-                    title={`Olahraga: ${s.sportName}`}
-                  >
-                    <SportIcon icon={s.sportIcon ?? "activity"} size={16} />
-                  </div>
-                  <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setDetailSession(s)} title="Klik untuk detail lengkap">
-                    <div className="flex items-center gap-2">
-                      <span className={cx("truncate text-[13px] font-medium group-hover:underline group-hover:decoration-volt/40 group-hover:underline-offset-4", s.status === "completed" && "text-volt")}>
-                        {s.title}
-                      </span>
-                      <Badge tone={TYPE_TONE[s.workoutType] ?? "neutral"}>{WORKOUT_TYPE_LABEL[s.workoutType] ?? s.workoutType}</Badge>
-                      <ChevronRight size={14} className="ml-auto shrink-0 text-dim" />
+                  <div className="flex min-w-0 items-start gap-2.5 md:flex-1" onClick={() => setDetailSession(s)} title="Klik untuk detail lengkap">
+                    <div className={cx("flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-line", CATEGORY_TONE[s.sportCategory ?? "other"])}>
+                      <SportIcon icon={s.sportIcon ?? "activity"} size={16} />
                     </div>
-                    <p className="mt-0.5 line-clamp-1 text-[11px] text-dim">{s.description}</p>
-                    {s.reason && (
-                      <div className="mt-1 rounded border border-amber2/30 bg-amber2/8 px-2 py-0.5 text-[10px] text-amber2 w-fit max-w-full truncate" title={s.reason}>
-                        Alasan: {s.reason}
+                    <div className="min-w-0 flex-1 cursor-pointer">
+                      <div className="flex items-center gap-2">
+                        <span className={cx("truncate text-[13px] font-medium", s.status === "completed" && "text-volt")}>{s.title}</span>
+                        <Badge tone={TYPE_TONE[s.workoutType] ?? "neutral"}>{WORKOUT_TYPE_LABEL[s.workoutType] ?? s.workoutType}</Badge>
+                        <ChevronRight size={14} className="ml-auto shrink-0 text-dim" />
                       </div>
-                    )}
+                      <p className="num mt-0.5 truncate text-[11px] text-dim md:hidden">
+                        {dayLabel(s.date)} · {fmtDateShort(s.date)}
+                        {s.durationPlannedS ? ` · ${fmtDurationShort(s.durationPlannedS)}` : ""}
+                        {s.distancePlannedM ? ` · ${fmtDistance(s.distancePlannedM)}` : ""}
+                        {s.tssPlanned != null ? ` · TSS ${fmtNum(s.tssPlanned)}` : ""}
+                      </p>
+                      <p className="mt-0.5 line-clamp-1 text-[11px] text-dim">{s.description}</p>
+                      {s.reason && (
+                        <div className="mt-1 w-fit max-w-full truncate rounded border border-amber2/30 bg-amber2/10 px-2 py-0.5 text-[10px] text-amber2" title={s.reason}>
+                          Alasan: {s.reason}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="num flex shrink-0 gap-3 text-[12px] text-mute">
+                  <div className="num hidden shrink-0 gap-3 text-[12px] text-mute md:flex">
                     {s.durationPlannedS && <span>{fmtDurationShort(s.durationPlannedS)}</span>}
                     {s.distancePlannedM && <span>{fmtDistance(s.distancePlannedM)}</span>}
                     {s.intensityTargets && <span className="text-amber2">{s.intensityTargets.join(", ")}</span>}
                     {s.tssPlanned != null && <span>TSS {fmtNum(s.tssPlanned)}</span>}
                   </div>
-                  <div className="flex shrink-0 items-center gap-1.5">
+                  <div className="mt-2.5 flex items-center justify-end gap-1.5 border-t border-line/60 pt-2.5 md:mt-0 md:border-0 md:pt-0">
                     <Badge tone={s.status === "completed" ? "volt" : s.status === "missed" ? "coral" : s.status === "skipped" ? "neutral" : "aqua"}>
                       {STATUS_LABEL[s.status]}
                     </Badge>
                     {s.status === "planned" && (
                       <>
                         <button
-                          onClick={() => sessionMut.mutate({ id: s.id, status: "completed" })}
-                          className="rounded-md border border-volt/30 p-1.5 text-volt transition-colors hover:bg-volt/10"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            sessionMut.mutate({ id: s.id, status: "completed" });
+                          }}
+                          className="flex h-8 items-center gap-1.5 rounded-md border border-volt/30 px-2.5 text-volt transition-colors hover:bg-volt/10"
                           title="Tandai selesai"
                         >
                           <Check size={13} />
+                          <span className="font-display text-[10px] font-semibold uppercase tracking-wider">Selesai</span>
                         </button>
                         <button
-                          onClick={() => setSkipFor(s)}
-                          className="rounded-md border border-coral/30 p-1.5 text-coral transition-colors hover:bg-coral/10"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSkipFor(s);
+                          }}
+                          className="flex h-8 items-center gap-1.5 rounded-md border border-coral/30 px-2.5 text-coral transition-colors hover:bg-coral/10"
                           title="Terlewat / dilewati — tulis alasannya agar AI menyesuaikan"
                         >
                           <X size={13} />
+                          <span className="font-display text-[10px] font-semibold uppercase tracking-wider">Lewat</span>
                         </button>
                       </>
                     )}
+                    {ended && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSkipFor(s);
+                        }}
+                        className="flex h-8 items-center gap-1.5 rounded-md border border-amber2/40 px-2.5 text-amber2 transition-colors hover:bg-amber2/10"
+                        title={s.reason ? "Perbarui alasan sesi ini" : "Tulis alasan sesi ini agar AI menyesuaikan"}
+                      >
+                        <PencilLine size={13} />
+                        <span className="font-display text-[10px] font-semibold uppercase tracking-wider">{s.reason ? "Edit Alasan" : "Tulis Alasan"}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </Card>
         ))}
@@ -299,14 +326,16 @@ function SkipModal({
   onClose: () => void;
   onSubmit: (status: "missed" | "skipped", reason: string | null) => void;
 }) {
-  const [reason, setReason] = useState("");
+  const reasonMode = session.status === "missed" || session.status === "skipped";
+  const [reason, setReason] = useState(session.reason ?? "");
   return (
-    <Modal open onClose={onClose} title={`Sesi: ${session.title}`}>
+    <Modal open onClose={onClose} title={reasonMode ? "Tulis Alasan" : `Lewati Sesi`}>
       <div className="mb-3 flex items-center gap-2 text-xs text-mute">
         <span className={cx("flex h-7 w-7 items-center justify-center rounded-lg border border-line", CATEGORY_TONE[session.sportCategory ?? "other"])}>
           <SportIcon icon={session.sportIcon ?? "activity"} size={14} />
         </span>
-        {session.sportName} · {fmtDateShort(session.date)} · {WORKOUT_TYPE_LABEL[session.workoutType] ?? session.workoutType}
+        <b className="font-semibold text-ink">{session.title}</b> · {session.sportName} · {fmtDateShort(session.date)} ·{" "}
+        {WORKOUT_TYPE_LABEL[session.workoutType] ?? session.workoutType}
         {session.durationPlannedS ? ` · ${fmtDurationShort(session.durationPlannedS)}` : ""}
       </div>
       <div className="mb-3 flex flex-wrap gap-1.5">
@@ -333,20 +362,29 @@ function SkipModal({
       <p className="mt-3 rounded-lg border border-line bg-surface2 px-3 py-2 text-[11px] text-mute">
         Alasan tersimpan bersama sesi dan otomatis menyertai regenerasi rencana — AI akan menyesuaikan beban berdasarkan penyebabnya. Sesi yang selesai/terlewat lainnya tetap dipertahankan.
       </p>
-      <div className="mt-5 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>
+      <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="ghost" className="w-full sm:w-auto" onClick={onClose}>
           Batal
         </Button>
-        <Button
-          variant="outline"
-          disabled={!reason.trim()}
-          onClick={() => onSubmit("skipped", reason.trim())}
-        >
-          Dilewati
-        </Button>
-        <Button variant="danger" loading={busy} disabled={!reason.trim()} onClick={() => onSubmit("missed", reason.trim())}>
-          Terlewatkan
-        </Button>
+        {reasonMode ? (
+          <Button
+            className="w-full sm:w-auto"
+            loading={busy}
+            disabled={!reason.trim()}
+            onClick={() => onSubmit(session.status as "missed" | "skipped", reason.trim())}
+          >
+            Simpan Alasan
+          </Button>
+        ) : (
+          <>
+            <Button variant="outline" className="w-full sm:w-auto" disabled={!reason.trim()} onClick={() => onSubmit("skipped", reason.trim())}>
+              Dilewati
+            </Button>
+            <Button variant="danger" className="w-full sm:w-auto" loading={busy} disabled={!reason.trim()} onClick={() => onSubmit("missed", reason.trim())}>
+              Terlewatkan
+            </Button>
+          </>
+        )}
       </div>
     </Modal>
   );
@@ -410,11 +448,11 @@ function FeedbackModal({ open, onClose }: { open: boolean; onClose: () => void }
         </Field>
       </div>
       <ErrorText>{error}</ErrorText>
-      <div className="mt-5 flex justify-end gap-2">
-        <Button variant="ghost" onClick={onClose}>
+      <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button variant="ghost" className="w-full sm:w-auto" onClick={onClose}>
           Batal
         </Button>
-        <Button loading={mut.isPending} onClick={() => mut.mutate()}>
+        <Button loading={mut.isPending} className="w-full sm:w-auto" onClick={() => mut.mutate()}>
           Kirim & Minta Penyesuaian
         </Button>
       </div>
@@ -483,11 +521,11 @@ function SessionDetailModal({
       )}
 
       {isPlanned && (
-        <div className="mt-5 flex justify-end gap-2">
-          <Button variant="danger" onClick={() => onSkip(session)}>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="danger" className="w-full sm:w-auto" onClick={() => onSkip(session)}>
             Terlewat / Dilewati…
           </Button>
-          <Button loading={busy} onClick={() => onComplete(session.id)}>
+          <Button loading={busy} className="w-full sm:w-auto" onClick={() => onComplete(session.id)}>
             <Check size={13} /> Tandai Selesai
           </Button>
         </div>

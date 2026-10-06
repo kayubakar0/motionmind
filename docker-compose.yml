@@ -1,0 +1,87 @@
+name: motionmind
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-server-build: &server-build
+  image: motionmind-server
+  build:
+    context: .
+    dockerfile: Dockerfile.server
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: motionmind-db
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:?ERROR-isi-DB_USERNAME-di-.env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?ERROR-isi-DB_PASSWORD-di-.env}
+      POSTGRES_DB: ${DB_DATABASE:-motionmind}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    <<: *server-build
+    container_name: motionmind-migrate
+    restart: "no"
+    logging: *logging
+    env_file: .env
+    command: ["sh", "-c", "cd /app/server && node ../node_modules/drizzle-kit/bin.cjs push --force && bun src/db/seed.ts"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  server:
+    <<: *server-build
+    container_name: motionmind-server
+    restart: unless-stopped
+    logging: *logging
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "bun", "-e", "fetch('http://127.0.0.1:3000/').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+
+  web:
+    image: motionmind-web
+    container_name: motionmind-web
+    restart: unless-stopped
+    logging: *logging
+    build:
+      context: .
+      dockerfile: Dockerfile.client
+      args:
+        VITE_SERVER_URL: ${VITE_SERVER_URL:?ERROR-isi-VITE_SERVER_URL-di-.env}
+    ports:
+      - "127.0.0.1:8010:80"
+    volumes:
+      - ./deploy/nginx/client.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      server:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  uploads:

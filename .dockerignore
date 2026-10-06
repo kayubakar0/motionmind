@@ -1,0 +1,17 @@
+.git
+.gitignore
+.turbo
+**/.turbo
+**/node_modules
+**/dist
+**/build
+uploads
+server/uploads
+.env
+.env.*
+**/.env
+Checklist.md
+preview.log
+**/*.log
+**/.DS_Store
+.dockerignore

@@ -199,3 +199,4 @@ docker compose start server
 | Certbot gagal (connection refused) | DNS belum mengarah ke VPS; tunggu propagate, cek `dig motionmind.my.id` |
 | Reset semua data (dev) | `docker compose down -v` — HATI-HATI: menghapus volume db+uploads |
 | Disk penuh oleh log | Log service sudah dibatasi di compose (`json-file`, max 10MB × 3 file) |
+| `unknown shorthand flag: 'd' in -d` saat `docker compose` | Docker bawaan distro tua tanpa plugin Compose v2 → install Docker resmi: `curl -fsSL https://get.docker.com \| sh` (hapus dulu `docker.io`/`docker-compose` lama), atau pasang plugin manual ke `/usr/local/lib/docker/cli-plugins/` |

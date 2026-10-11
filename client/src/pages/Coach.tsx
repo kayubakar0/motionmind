@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { Sparkles, History, CheckCircle2, CircleDashed, SendHorizonal, MessageSquareText, XCircle } from "lucide-react";
+import { Sparkles, History, CheckCircle2, CircleDashed, SendHorizonal, MessageSquareText, XCircle, ChevronDown } from "lucide-react";
 import type { RecommendationDTO } from "shared";
 import { api } from "../lib/api";
 import { Badge, Button, Card, EmptyState, PageHeader, Textarea, cx } from "../components/ui";
@@ -33,6 +33,14 @@ const QUICK_ACTIONS = [
   "Saran pemulihan untuk kondisi saya saat ini",
 ];
 
+const HISTORY_VISIBLE = 4;
+
+function oneLine(text: string | null | undefined, max = 110) {
+  if (!text) return "";
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > max ? flat.slice(0, max).trimEnd() + "…" : flat;
+}
+
 export default function CoachPage() {
   const qc = useQueryClient();
   const [input, setInput] = useState("");
@@ -52,6 +60,18 @@ export default function CoachPage() {
     mutationFn: (question: string) => api<{ answer: string }>("/coach/ask", { method: "POST", json: { question } }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["coachMessages"] }),
   });
+
+  const [openRows, setOpenRows] = useState<Set<string>>(new Set());
+  const [showAllHistory, setShowAllHistory] = useState(false);
+
+  function toggleRow(id: string) {
+    setOpenRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -183,40 +203,132 @@ export default function CoachPage() {
             }
           />
         ) : (
-          <div className="space-y-4">
-            {recs.map((r, i) => (
-              <Card key={r.id} className={cx("rise overflow-hidden", `d${Math.min(i + 2, 8)}`, r.status === "active" && "border-volt/30")}>
-                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface2/40 px-5 py-3">
-                  <div className="flex items-center gap-2.5">
-                    {r.status === "active" ? <CheckCircle2 size={15} className="text-volt" /> : r.status === "expired" ? <XCircle size={15} className="text-coral" /> : <CircleDashed size={15} className="text-dim" />}
-                    <Badge tone={r.status === "active" ? "volt" : r.status === "expired" ? "coral" : "neutral"}>
-                      {r.status === "active" ? "Rekomendasi Aktif" : r.status === "expired" ? "Gagal" : "Tersuperse"}
-                    </Badge>
-                    <Badge tone={r.trigger === "condition_change" ? "amber" : r.trigger === "missed_workout" ? "coral" : "aqua"}>
-                      {TRIGGER_LABEL[r.trigger] ?? r.trigger}
-                    </Badge>
-                  </div>
-                  <div className="num flex items-center gap-3 text-[11px] text-dim">
-                    {r.providerName && (
-                      <span className="flex items-center gap-1">
-                        <History size={11} /> {r.providerName}
+          (() => {
+            const actives = recs.filter((r) => r.status === "active");
+            const history = recs.filter((r) => r.status !== "active");
+            const visibleHistory = showAllHistory ? history : history.slice(0, HISTORY_VISIBLE);
+
+            return (
+              <div className="space-y-3">
+                {actives.map((r, i) => (
+                  <Card key={r.id} className={cx("rise overflow-hidden border-volt/30", `d${Math.min(i + 2, 8)}`)}>
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line bg-surface2/40 px-5 py-3">
+                      <div className="flex items-center gap-2.5">
+                        <CheckCircle2 size={15} className="text-volt" />
+                        <Badge tone="volt">Rekomendasi Aktif</Badge>
+                        <Badge tone={r.trigger === "condition_change" ? "amber" : r.trigger === "missed_workout" ? "coral" : "aqua"}>
+                          {TRIGGER_LABEL[r.trigger] ?? r.trigger}
+                        </Badge>
+                      </div>
+                      <div className="num flex items-center gap-3 text-[11px] text-dim">
+                        {r.providerName && (
+                          <span className="flex items-center gap-1">
+                            <History size={11} /> {r.providerName}
+                          </span>
+                        )}
+                        {fmtDateTime(r.createdAt)}
+                      </div>
+                    </div>
+                    <div className="px-5 py-4">
+                      {r.output?.name && <div className="font-display text-sm font-bold tracking-wide uppercase">{r.output.name}</div>}
+                      {r.output?.warnings && r.output.warnings.length > 0 && (
+                        <ul className="mt-2 space-y-1">
+                          {r.output.warnings.map((w, j) => (
+                            <li key={j} className="flex items-start gap-1.5 text-xs text-amber2">
+                              <XCircle size={12} className="mt-0.5 shrink-0" /> {w}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      {r.summary && <Markdown content={r.summary} />}
+                      {r.planId && (
+                        <Link to="/plan" className="mt-3 inline-block text-xs font-semibold text-volt hover:underline">
+                          Buka rencana hasil rekomendasi ini →
+                        </Link>
+                      )}
+                    </div>
+                  </Card>
+                ))}
+
+                {history.length > 0 && (
+                  <Card className="rise d2 overflow-hidden">
+                    <button
+                      onClick={() => setShowAllHistory((v) => !v)}
+                      className="label-tech flex w-full items-center justify-between px-4 py-2.5 text-left transition-colors hover:text-volt/90"
+                      aria-expanded={showAllHistory}
+                    >
+                      <span className="flex items-center gap-2">
+                        <History size={12} /> Riwayat Terdahulu ({history.length})
+                        {!showAllHistory && history.length > HISTORY_VISIBLE && (
+                          <span className="text-[10px] text-dim normal-case tracking-normal">· {visibleHistory.length} terakhir</span>
+                        )}
                       </span>
+                      <ChevronDown size={13} className={cx("transition-transform duration-200", showAllHistory && "rotate-180")} />
+                    </button>
+
+                    <div className="divide-y divide-line border-t border-line">
+                      {visibleHistory.map((r) => {
+                        const open = openRows.has(r.id);
+                        const statusIcon =
+                          r.status === "expired" ? <XCircle size={13} className="shrink-0 text-coral" /> : <CircleDashed size={13} className="shrink-0 text-dim" />;
+                        return (
+                          <div
+                            key={r.id}
+                            className={cx("group cursor-pointer text-left transition-colors hover:bg-surface2/60", open && "bg-surface2/40")}
+                            onClick={() => toggleRow(r.id)}
+                            role="button"
+                            tabIndex={0}
+                            aria-expanded={open}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                toggleRow(r.id);
+                              }
+                            }}
+                          >
+                            <div className="flex items-center gap-2.5 px-4 py-2.5">
+                              <ChevronDown size={12} className={cx("shrink-0 text-dim transition-transform duration-200", open && "rotate-180")} />
+                              {statusIcon}
+                              <span className="truncate text-xs text-mute group-hover:text-ink/90">{oneLine(r.output?.name ?? r.summary, 90)}</span>
+                              <span className="ml-auto shrink-0 text-[10px] text-dim whitespace-nowrap">{fmtDateTime(r.createdAt)}</span>
+                            </div>
+                            {open && (
+                              <div className="px-4 pb-3.5 pt-0.5" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <Badge tone={r.status === "expired" ? "coral" : "neutral"}>
+                                    {r.status === "expired" ? "Gagal" : "Tersuperse"}
+                                  </Badge>
+                                  <Badge tone={r.trigger === "condition_change" ? "amber" : r.trigger === "missed_workout" ? "coral" : "aqua"}>
+                                    {TRIGGER_LABEL[r.trigger] ?? r.trigger}
+                                  </Badge>
+                                  {r.providerName && <span className="text-[10px] text-dim">{r.providerName}</span>}
+                                </div>
+                                {r.output?.name && (
+                                  <div className="mt-2 font-display text-xs font-bold tracking-wide uppercase text-ink/90">{r.output.name}</div>
+                                )}
+                                {r.summary && <div className="mt-1.5"><Markdown content={r.summary} /></div>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {history.length > visibleHistory.length && (
+                      <div className="border-t border-line px-4 py-2 text-center">
+                        <button
+                          onClick={() => setShowAllHistory(true)}
+                          className="text-[11px] font-semibold text-volt transition-colors hover:underline"
+                        >
+                          Tampilkan semua {history.length} →
+                        </button>
+                      </div>
                     )}
-                    {fmtDateTime(r.createdAt)}
-                  </div>
-                </div>
-                <div className="px-5 py-4">
-                  {r.output?.name && <div className="font-display text-sm font-bold tracking-wide uppercase">{r.output.name}</div>}
-                  {r.summary && <Markdown content={r.summary} />}
-                  {r.planId && r.status === "active" && (
-                    <Link to="/plan" className="mt-3 inline-block text-xs font-semibold text-volt hover:underline">
-                      Buka rencana hasil rekomendasi ini →
-                    </Link>
-                  )}
-                </div>
-              </Card>
-            ))}
-          </div>
+                  </Card>
+                )}
+              </div>
+            );
+          })()
         )}
       </div>
     </>

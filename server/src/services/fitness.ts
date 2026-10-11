@@ -1,7 +1,7 @@
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "../db";
 import { activities, activityMetrics, sports } from "../db/schema";
-import type { DashboardStats, FitnessPoint } from "shared";
+import type { DashboardStats, FitnessPoint, WeeklyVolume } from "shared";
 
 export async function getDailyTss(userId: string, days: number): Promise<Array<{ date: string; tss: number }>> {
   const rows = await db
@@ -93,9 +93,19 @@ export async function getDashboardStats(userId: string): Promise<DashboardStats>
     w.totalHours = Math.round((w.totalHours + hours) * 100) / 100;
     w.tss = Math.round((w.tss + (r.tss ?? 0)) * 10) / 10;
   }
-  const weekly = [...weekMap.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([weekStart, v]) => ({ weekStart, ...v }));
+  const startWeek = isoWeekStart(since);
+  const endWeek = isoWeekStart(new Date());
+  const weekly: WeeklyVolume[] = [];
+  for (let t = Date.parse(`${startWeek}T00:00:00.000Z`); t <= Date.parse(`${endWeek}T00:00:00.000Z`); t += 7 * 86400000) {
+    const key = new Date(t).toISOString().slice(0, 10);
+    const v = weekMap.get(key);
+    weekly.push({
+      weekStart: key,
+      hoursBySport: v?.hoursBySport ?? {},
+      totalHours: v?.totalHours ?? 0,
+      tss: v?.tss ?? 0,
+    });
+  }
 
   const cutoff30 = Date.now() - 30 * 86400000;
   const last30 = rows.filter((r) => new Date(r.startDate).getTime() >= cutoff30);

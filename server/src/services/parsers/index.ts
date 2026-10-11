@@ -1,7 +1,7 @@
-import { parseGpx, parseGpxRoute, type RouteStats } from "./gpx";
-import { parseTcx } from "./tcx";
-import { parseFit } from "./fit";
-import type { ParsedActivityFile } from "./common";
+import { parseGpx, parseGpxRoute } from "./gpx";
+import { parseTcx, parseTcxRoute } from "./tcx";
+import { parseFit, parseFitRoute } from "./fit";
+import type { ParsedActivityFile, RouteStats } from "./common";
 
 export type { ParsedActivityFile, RouteStats };
 
@@ -27,6 +27,17 @@ export async function parseActivityFile(format: ActivityFormat, buffer: Buffer):
       return parseTcx(buffer.toString("utf8"));
     case "fit":
       return parseFit(buffer);
+  }
+}
+
+export async function parseRouteFile(format: ActivityFormat, buffer: Buffer): Promise<RouteStats> {
+  switch (format) {
+    case "gpx":
+      return parseGpxRoute(buffer.toString("utf8"));
+    case "tcx":
+      return parseTcxRoute(buffer.toString("utf8"));
+    case "fit":
+      return parseFitRoute(buffer);
   }
 }
 

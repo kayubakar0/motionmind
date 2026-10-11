@@ -14,6 +14,18 @@ export const LoginInput = z.object({
 });
 export type LoginInput = z.infer<typeof LoginInput>;
 
+export const UpdateProfileInput = z.object({
+  name: z.string().trim().max(64, "Nama maksimal 64 karakter").optional(),
+  email: z.string().trim().email("Format email tidak valid").optional().or(z.literal("")),
+});
+export type UpdateProfileInput = z.infer<typeof UpdateProfileInput>;
+
+export const ChangePasswordInput = z.object({
+  currentPassword: z.string().min(1, "Password saat ini wajib diisi"),
+  newPassword: z.string().min(8, "Minimal 8 karakter").max(128, "Maksimal 128 karakter"),
+});
+export type ChangePasswordInput = z.infer<typeof ChangePasswordInput>;
+
 export const ForgotInput = z.object({ username: z.string().min(1) });
 
 export const ResetInput = z.object({
@@ -31,6 +43,14 @@ export const OnboardingInput = z.object({
     maxHr: z.number().int().min(120).max(230).nullable().optional(),
     weeklyHoursTarget: z.number().min(1).max(40).nullable().optional(),
     experienceLevel: z.enum(["beginner", "intermediate", "advanced"]).nullable().optional(),
+    age: z.number().int().min(10).max(90).nullable().optional(),
+    heightCm: z.number().int().min(120).max(230).nullable().optional(),
+    lthr: z.number().int().min(100).max(220).nullable().optional(),
+    preferredDaysPerWeek: z.number().int().min(1).max(7).nullable().optional(),
+    preferredWorkoutTime: z.enum(["morning", "afternoon", "evening", "night", "flexible"]).nullable().optional(),
+    hasPowerMeter: z.boolean().nullable().optional(),
+    hasTrainer: z.boolean().nullable().optional(),
+    healthNotes: z.string().max(500).nullable().optional(),
   }),
 });
 export type OnboardingInput = z.infer<typeof OnboardingInput>;
@@ -70,11 +90,28 @@ export const TargetUpdateInput = TargetInput.partial().extend({
 });
 export type TargetUpdateInput = z.infer<typeof TargetUpdateInput>;
 
+export const RouteInput = z.object({
+  sportId: z.string().min(1),
+  name: z.string().min(1).max(120),
+  description: z.string().max(2000).nullable().optional(),
+  fileId: z.string().uuid().nullable().optional(),
+});
+export type RouteInput = z.infer<typeof RouteInput>;
+
+export const RouteUpdateInput = RouteInput.partial();
+export type RouteUpdateInput = z.infer<typeof RouteUpdateInput>;
+
 export const SessionStatusInput = z.object({
   status: z.enum(["planned", "completed", "missed", "skipped"]),
   activityId: z.string().uuid().nullable().optional(),
   reason: z.string().trim().max(500, "Alasan maksimal 500 karakter").nullable().optional(),
 });
+
+export const RegeneratePlanInput = z.object({
+  targetId: z.string().uuid().nullable().optional(),
+  sports: z.array(z.string().min(1)).min(1, "Pilih minimal satu olahraga").optional(),
+});
+export type RegeneratePlanInput = z.infer<typeof RegeneratePlanInput>;
 
 export const FeedbackInput = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -88,8 +125,20 @@ export type FeedbackInput = z.infer<typeof FeedbackInput>;
 
 export const AskCoachInput = z.object({
   question: z.string().trim().min(3, "Pertanyaan terlalu pendek").max(600, "Pertanyaan maksimal 600 karakter"),
+  sessionId: z.string().uuid().nullable().optional(),
 });
 export type AskCoachInput = z.infer<typeof AskCoachInput>;
+
+export const CreateCoachSessionInput = z.object({
+  title: z.string().trim().min(1).max(120).optional(),
+});
+export type CreateCoachSessionInput = z.infer<typeof CreateCoachSessionInput>;
+
+export const UpdateCoachSessionInput = z.object({
+  title: z.string().trim().min(1).max(120).optional(),
+  status: z.enum(["active", "archived"]).optional(),
+});
+export type UpdateCoachSessionInput = z.infer<typeof UpdateCoachSessionInput>;
 
 export const AiProviderInput = z.object({
   name: z.string().min(1).max(60),

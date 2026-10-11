@@ -48,30 +48,43 @@ onboardingRoutes.post("/", requireAuth(), async (c) => {
   );
 
   const p = body.profile ?? {};
+  const insertValues = {
+    userId: user.id,
+    ftp: p.ftp ?? null,
+    weightKg: p.weightKg ?? null,
+    restingHr: p.restingHr ?? null,
+    maxHr: p.maxHr ?? null,
+    weeklyHoursTarget: p.weeklyHoursTarget ?? null,
+    experienceLevel: p.experienceLevel ?? null,
+    age: p.age ?? null,
+    heightCm: p.heightCm ?? null,
+    lthr: p.lthr ?? null,
+    preferredDaysPerWeek: p.preferredDaysPerWeek ?? null,
+    preferredWorkoutTime: p.preferredWorkoutTime ?? null,
+    hasPowerMeter: p.hasPowerMeter ?? null,
+    hasTrainer: p.hasTrainer ?? null,
+    healthNotes: p.healthNotes ?? null,
+    updatedAt: new Date(),
+  };
+  const updateSet: Partial<typeof athleteProfiles.$inferInsert> = { updatedAt: new Date() };
+  if (p.ftp !== undefined) updateSet.ftp = p.ftp;
+  if (p.weightKg !== undefined) updateSet.weightKg = p.weightKg;
+  if (p.restingHr !== undefined) updateSet.restingHr = p.restingHr;
+  if (p.maxHr !== undefined) updateSet.maxHr = p.maxHr;
+  if (p.weeklyHoursTarget !== undefined) updateSet.weeklyHoursTarget = p.weeklyHoursTarget;
+  if (p.experienceLevel !== undefined) updateSet.experienceLevel = p.experienceLevel;
+  if (p.age !== undefined) updateSet.age = p.age;
+  if (p.heightCm !== undefined) updateSet.heightCm = p.heightCm;
+  if (p.lthr !== undefined) updateSet.lthr = p.lthr;
+  if (p.preferredDaysPerWeek !== undefined) updateSet.preferredDaysPerWeek = p.preferredDaysPerWeek;
+  if (p.preferredWorkoutTime !== undefined) updateSet.preferredWorkoutTime = p.preferredWorkoutTime;
+  if (p.hasPowerMeter !== undefined) updateSet.hasPowerMeter = p.hasPowerMeter;
+  if (p.hasTrainer !== undefined) updateSet.hasTrainer = p.hasTrainer;
+  if (p.healthNotes !== undefined) updateSet.healthNotes = p.healthNotes;
   await db
     .insert(athleteProfiles)
-    .values({
-      userId: user.id,
-      ftp: p.ftp ?? null,
-      weightKg: p.weightKg ?? null,
-      restingHr: p.restingHr ?? null,
-      maxHr: p.maxHr ?? null,
-      weeklyHoursTarget: p.weeklyHoursTarget ?? null,
-      experienceLevel: p.experienceLevel ?? null,
-      updatedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: athleteProfiles.userId,
-      set: {
-        ftp: p.ftp ?? null,
-        weightKg: p.weightKg ?? null,
-        restingHr: p.restingHr ?? null,
-        maxHr: p.maxHr ?? null,
-        weeklyHoursTarget: p.weeklyHoursTarget ?? null,
-        experienceLevel: p.experienceLevel ?? null,
-        updatedAt: new Date(),
-      },
-    });
+    .values(insertValues)
+    .onConflictDoUpdate({ target: athleteProfiles.userId, set: updateSet });
 
   if (p.ftp) {
     const today = new Date().toISOString().slice(0, 10);

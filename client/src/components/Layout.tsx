@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   Bike,
   Target as TargetIcon,
+  Route as RouteIcon,
   CalendarDays,
   Sparkles,
   Settings as SettingsIcon,
@@ -21,6 +22,7 @@ const NAV = [
   { to: "/", label: "Dashboard", labelShort: "Home", icon: LayoutDashboard },
   { to: "/activities", label: "Aktivitas", labelShort: "Aktiv.", icon: Bike },
   { to: "/targets", label: "Target", labelShort: "Target", icon: TargetIcon },
+  { to: "/routes", label: "Rute Saya", labelShort: "Rute", icon: RouteIcon },
   { to: "/plan", label: "Rencana", labelShort: "Rencana", icon: CalendarDays },
   { to: "/coach", label: "Pelatih AI", labelShort: "Coach", icon: Sparkles },
   { to: "/settings", label: "Pengaturan", labelShort: "Atur", icon: SettingsIcon },
@@ -158,7 +160,7 @@ export default function Layout() {
         className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/92 backdrop-blur-xl md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="grid h-16 grid-cols-5">
+        <div className="grid h-16 grid-cols-6">
           {MOBILE_NAV.map(({ to, labelShort, icon: Icon }) => (
             <NavLink
               key={to}

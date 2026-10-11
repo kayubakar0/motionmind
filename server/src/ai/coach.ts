@@ -4,6 +4,7 @@ import {
   activities,
   planSessions,
   recommendations,
+  sports,
   trainingPlans,
   userSports,
 } from "../db/schema";
@@ -32,6 +33,12 @@ Prinsip:
   - Anggap TSS lintas olahraga setara saat menghitung beban total mingguan; jaga keseimbangan beban antar olahraga sesuai proporsi historis & target utama atlet.
 - Gunakan HANYA sport id yang tersedia pada daftar sport atlet.
 - Angka TSS realistis: endurance 40-90, tempo 60-120, intervals 70-140, long ride 120-260, recovery 20-40, strength 30-80, yoga/flexibility 10-30.
+- DATA OPSIONAL: beberapa field atlet bisa bernilai null (age, heightCm, lthr, preferredDaysPerWeek, preferredWorkoutTime, hasPowerMeter, hasTrainer, healthNotes). Jika null berarti tidak diketahui — JANGAN mengarang nilainya; gunakan estimasi konservatif yang aman dan sebutkan asumsi di rationale bila relevan.
+- Hormati preferredDaysPerWeek (jumlah hari latihan per minggu yang diinginkan atlet) bila ada: jumlah sesi per minggu tidak boleh melebihinya (rest tidak dihitung). Hormati preferredWorkoutTime bila ada (pagi/siang/sore/malam) dengan menyebut jam yang masuk akal di description.
+- Jika lthr ada, gunakan sebagai acuan intensitas zona HR (Z1 <68% lthr, Z2 68-83%, Z3 83-88%, Z4 88-93%, Z5 >93%); jika tidak ada, gunakan zona berbasis maxHr.
+- hasPowerMeter: jika false, jangan preskripsi berbasis watt — gunakan HR/pace/RPE. Jika true dan FTP ada, resep interval boleh berbasis watt.
+- hasTrainer: jika true, alternatifkan sesi sepeda dengan trainer indoor saat jadwal bertabrakan cuaca/waktu; jika false, asumsi semua sepeda di jalan.
+- healthNotes (cedera, keterbatasan, kondisi kesehatan) WAJIB dipatuhi: jangan jadwalkan sesi yang berisiko terhadap catatan tersebut, sesuaikan jenis/beban latihan, dan sebutkan penyesuaiannya secara eksplisit di rationale atau warnings.
 
 Format output: HANYA satu objek JSON valid (tanpa markdown, tanpa penjelasan di luar JSON) dengan skema:
 {
@@ -75,9 +82,12 @@ function todayLocal(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function buildUserPrompt(ctx: CoachContext, trigger: PlanTrigger, targetId?: string): string {
+function buildUserPrompt(ctx: CoachContext, trigger: PlanTrigger, targetId?: string, sports?: string[]): string {
   const today = todayLocal();
   const focusTarget = targetId ? ctx.targets.find((t) => t.id === targetId) ?? ctx.targets[0] : ctx.targets[0];
+  const sportRule = sports
+    ? `- ATLET MEMILIH OLAHRAGA INI SECARA EKSPLISIT untuk rencana ini: ${sports.join(", ")}. Gunakan HANYA sport id tersebut (bersama rest), jangan pernah memakai olahraga lain. Alokasikan beban di antara olahraga terpilih secara proporsional dan bermakna — jangan hanya berfokus pada satu.`
+    : "- Gunakan HANYA sport id yang tersedia pada daftar sport atlet.";
   return `Susun rencana latihan baru untuk atlet berikut.
 
 TANGGAL HARI INI: ${today} (rencana dimulai dari tanggal ini).
@@ -89,6 +99,7 @@ ${JSON.stringify(ctx, null, 2)}
 ${focusTarget ? `TARGET UTAMA YANG DIPRIORITASKAN: ${JSON.stringify(focusTarget)}` : "Tidak ada target spesifik — bangun kebugaran dasar yang sehat."}
 
 ATURAN TAMBAHAN:
+${sportRule}
 - weeks[].week_start harus Senin dari minggu terkait; sesi pertama dimulai dari ${today}.
 - Setiap sesi harus punya date antara ${today} dan maksimal 12 minggu ke depan (atau sampai tanggal target jika lebih dekat).
 - duration_min wajib untuk semua sesi selain rest.
@@ -153,13 +164,22 @@ async function persistPlan(
     model: string;
     ctx: CoachContext;
     targetId?: string;
+    sports?: string[];
   }
 ): Promise<{ planId: string }> {
-  const sportRows = await db
-    .select({ id: userSports.sportId })
-    .from(userSports)
-    .where(eq(userSports.userId, userId));
-  const allowed = new Set(sportRows.map((s) => s.id));
+  let allowed: Set<string>;
+  if (meta.sports && meta.sports.length > 0) {
+    const known = await db.select({ id: sports.id }).from(sports);
+    const knownIds = new Set(known.map((k) => k.id));
+    allowed = new Set(meta.sports.filter((s) => knownIds.has(s)));
+    if (allowed.size === 0) throw new ApiError(400, "Olahraga terpilih tidak dikenal");
+  } else {
+    const sportRows = await db
+      .select({ id: userSports.sportId })
+      .from(userSports)
+      .where(eq(userSports.userId, userId));
+    allowed = new Set(sportRows.map((s) => s.id));
+  }
   const primary = meta.ctx.athlete.primarySport ?? "ride";
 
   const today = todayLocal();
@@ -268,13 +288,13 @@ async function persistPlan(
 export async function generatePlan(
   userId: string,
   trigger: PlanTrigger,
-  opts: { targetId?: string } = {}
+  opts: { targetId?: string; sports?: string[] } = {}
 ): Promise<{ planId: string }> {
   const provider = await getActiveProvider();
-  const ctx = await buildCoachContext(userId);
+  const ctx = await buildCoachContext(userId, { sports: opts.sports });
   const messages: ChatMessage[] = [
     { role: "system", content: SYSTEM_PROMPT },
-    { role: "user", content: buildUserPrompt(ctx, trigger, opts.targetId) },
+    { role: "user", content: buildUserPrompt(ctx, trigger, opts.targetId, opts.sports) },
   ];
   const output = await requestPlan(messages, provider, userId);
   return persistPlan(userId, output, {
@@ -283,6 +303,7 @@ export async function generatePlan(
     model: provider.model,
     ctx,
     targetId: opts.targetId,
+    sports: opts.sports,
   });
 }
 

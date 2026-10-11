@@ -1,5 +1,5 @@
 import FitParser from "fit-file-parser";
-import { newAccum, finalizeAccum, guessSportHint, type ParsedActivityFile } from "./common";
+import { buildRouteStats, newAccum, finalizeAccum, guessSportHint, type ParsedActivityFile, type RoutePoint, type RouteStats } from "./common";
 import { elevationGainM } from "../geo";
 
 const SPORT_MAP: Record<string, string> = {
@@ -117,4 +117,22 @@ export async function parseFit(buffer: Buffer): Promise<ParsedActivityFile> {
     null;
 
   return result;
+}
+
+/** Parse FIT rute/course menjadi statistik rute */
+export async function parseFitRoute(buffer: Buffer): Promise<RouteStats> {
+  const data = await parseFitAsync(buffer);
+  const records = data.records ?? [];
+  const points: RoutePoint[] = [];
+
+  for (const r of records) {
+    const lat = typeof r.position_lat === "number" ? r.position_lat : null;
+    const lon = typeof r.position_long === "number" ? r.position_long : null;
+    if (lat == null || lon == null || Math.abs(lat) > 90) continue;
+    const alt = (r.enhanced_altitude ?? r.altitude) as number | undefined;
+    points.push({ lat, lon, ele: typeof alt === "number" && Number.isFinite(alt) ? alt : null });
+  }
+
+  if (points.length < 2) throw new Error("FIT rute tidak berisi cukup titik GPS");
+  return buildRouteStats(points);
 }

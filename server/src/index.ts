@@ -11,6 +11,7 @@ import { activityRoutes } from "./routes/activities";
 import { uploadRoutes } from "./routes/uploads";
 import { stravaRoutes } from "./routes/strava";
 import { targetRoutes } from "./routes/targets";
+import { savedRouteRoutes } from "./routes/routes";
 import { planRoutes } from "./routes/plans";
 import { coachRoutes } from "./routes/coach";
 import { dashboardRoutes } from "./routes/dashboard";
@@ -54,6 +55,7 @@ api.route("/activities", activityRoutes);
 api.route("/uploads", uploadRoutes);
 api.route("/strava", stravaRoutes);
 api.route("/targets", targetRoutes);
+api.route("/routes", savedRouteRoutes);
 api.route("/plans", planRoutes);
 api.route("/coach", coachRoutes);
 api.route("/dashboard", dashboardRoutes);
@@ -73,6 +75,7 @@ async function bootstrap() {
 try {
   Bun.serve({
     port: env.PORT,
+    idleTimeout: 255,
     fetch: app.fetch,
   });
 } catch (err) {

@@ -8,6 +8,7 @@ import { Badge, Button, Card, PageHeader, Stat, cx } from "../components/ui";
 import { StreamChart, ZoneBars } from "../components/Charts";
 import RouteMap from "../components/RouteMap";
 import ElevationProfile, { GradeLegend } from "../components/ElevationProfile";
+import ActivityAnalysis from "../components/ActivityAnalysis";
 import { buildProfileFromStreams } from "../lib/geo";
 import { fmtDate, fmtDistance, fmtDuration, fmtElevation, fmtNum, fmtPace } from "../lib/format";
 
@@ -251,6 +252,8 @@ export default function ActivityDetailPage() {
           </div>
         )}
       </Card>
+
+      <ActivityAnalysis activityId={a.id} />
     </>
   );
 }

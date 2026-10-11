@@ -8,6 +8,7 @@ import { getAuthUser, requireAuth, type AppEnv } from "../middleware/auth";
 import { enqueue, hasPendingJob } from "../jobs/queue";
 import { getConnection } from "../services/strava/client";
 import { afterActivityCreated } from "../jobs/handlers";
+import { analyzeActivity, getActivityAnalysis } from "../ai/activityAnalyst";
 
 export const activityRoutes = new Hono<AppEnv>();
 
@@ -171,6 +172,20 @@ activityRoutes.post("/:id/push-strava", async (c) => {
   if (!(await getConnection(user.id))) throw new ApiError(400, "Strava belum terhubung");
   const job = await enqueue("strava_push_activity", { userId: user.id, activityId: id });
   return c.json({ queued: true, jobId: job.id });
+});
+
+activityRoutes.get("/:id/analysis", async (c) => {
+  const user = getAuthUser(c);
+  const id = c.req.param("id");
+  const analysis = await getActivityAnalysis(user.id, id);
+  return c.json({ analysis });
+});
+
+activityRoutes.post("/:id/analysis", async (c) => {
+  const user = getAuthUser(c);
+  const id = c.req.param("id");
+  const analysis = await analyzeActivity(user.id, id);
+  return c.json({ analysis });
 });
 
 activityRoutes.post("/:id/recompute", async (c) => {

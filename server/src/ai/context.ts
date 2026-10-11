@@ -25,6 +25,14 @@ export interface CoachContext {
     weightKg: number | null;
     weeklyHoursTarget: number | null;
     experienceLevel: string | null;
+    age: number | null;
+    heightCm: number | null;
+    lthr: number | null;
+    preferredDaysPerWeek: number | null;
+    preferredWorkoutTime: string | null;
+    hasPowerMeter: boolean | null;
+    hasTrainer: boolean | null;
+    healthNotes: string | null;
     sports: Array<{ id: string; name: string; category: string }>;
     primarySport: string | null;
   };
@@ -85,7 +93,7 @@ function weekStartOf(d: Date): string {
   return mondayOf(d);
 }
 
-export async function buildCoachContext(userId: string): Promise<CoachContext> {
+export async function buildCoachContext(userId: string, opts: { sports?: string[] } = {}): Promise<CoachContext> {
   const [profileRows, sportRows, userRows] = await Promise.all([
     db.select().from(athleteProfiles).where(eq(athleteProfiles.userId, userId)).limit(1),
     db
@@ -97,7 +105,9 @@ export async function buildCoachContext(userId: string): Promise<CoachContext> {
   ]);
   const profile = profileRows[0] ?? null;
   const user = userRows[0] ?? null;
-  const primary = sportRows.find((s) => s.isPrimary) ?? null;
+  const selected = opts.sports ? new Set(opts.sports) : null;
+  const filteredRows = selected ? sportRows.filter((s) => selected.has(s.sportId)) : sportRows;
+  const primary = filteredRows.find((s) => s.isPrimary) ?? filteredRows[0] ?? null;
 
   const daily = await getDailyTss(userId, 28);
   const series = computeFitnessSeries(daily, 28);
@@ -200,7 +210,15 @@ export async function buildCoachContext(userId: string): Promise<CoachContext> {
       weightKg: profile?.weightKg ?? null,
       weeklyHoursTarget: profile?.weeklyHoursTarget ?? null,
       experienceLevel: profile?.experienceLevel ?? null,
-      sports: sportRows.map((s) => ({ id: s.sportId, name: s.name, category: s.category })),
+      age: profile?.age ?? null,
+      heightCm: profile?.heightCm ?? null,
+      lthr: profile?.lthr ?? null,
+      preferredDaysPerWeek: profile?.preferredDaysPerWeek ?? null,
+      preferredWorkoutTime: profile?.preferredWorkoutTime ?? null,
+      hasPowerMeter: profile?.hasPowerMeter ?? null,
+      hasTrainer: profile?.hasTrainer ?? null,
+      healthNotes: profile?.healthNotes ?? null,
+      sports: filteredRows.map((s) => ({ id: s.sportId, name: s.name, category: s.category })),
       primarySport: primary?.sportId ?? null,
     },
     fitness: {

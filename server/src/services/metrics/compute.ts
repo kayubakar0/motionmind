@@ -6,6 +6,8 @@ export interface ComputeMetricsInput {
   ftp: number | null;
   maxHr: number | null;
   restingHr: number | null;
+  age: number | null;
+  lthr: number | null;
   elapsedS: number;
   movingTimeS: number | null;
   distanceM: number | null;
@@ -86,7 +88,7 @@ function hrTssFromZones(zones: ZoneDistribution[] | null, lthr: number): number 
 }
 
 export function computeActivityMetrics(input: ComputeMetricsInput): ComputedMetrics {
-  const { sport, ftp, maxHr, restingHr, distanceM, streams } = input;
+  const { sport, ftp, maxHr, restingHr, age, lthr, distanceM, streams } = input;
   const elapsedS = input.elapsedS || streams?.time?.length || 0;
   if (!elapsedS) throw new ApiError(400, "Durasi aktivitas tidak diketahui");
 
@@ -114,14 +116,11 @@ export function computeActivityMetrics(input: ComputeMetricsInput): ComputedMetr
   const powerTss =
     np && ftp ? Math.round(((movingS * np * (np / ftp)) / (ftp * 3600)) * 100 * 10) / 10 : null;
 
-  const hrZones = zoneSeconds(
-    streams?.heartrate ?? null,
-    HR_ZONES,
-    maxHr ?? 190
-  );
+  const estMaxHr = maxHr ?? (age ? Math.round(220 - age) : null) ?? 190;
+  const hrZones = zoneSeconds(streams?.heartrate ?? null, HR_ZONES, estMaxHr);
 
-  const lthr = maxHr ? Math.round(maxHr * 0.88) : null;
-  const hrTss = hrTssFromZones(hrZones, lthr ?? 0) ?? null;
+  const effLthr = lthr ?? (maxHr ? Math.round(maxHr * 0.88) : null);
+  const hrTss = hrTssFromZones(hrZones, effLthr ?? 0) ?? null;
 
   const powerZones = ftp ? zoneSeconds(streams?.watts ?? null, POWER_ZONES, ftp) : null;
 

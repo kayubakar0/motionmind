@@ -109,7 +109,7 @@ export default function DashboardPage() {
 
         <Card className="rise d6 p-5 lg:col-span-2">
           <div className="label-tech mb-3">Volume Mingguan · Jam per Olahraga</div>
-          {stats && stats.weekly.length > 0 ? <WeeklyVolumeChart data={stats.weekly.slice(-10)} /> : <ChartSkeleton />}
+          {stats && stats.weekly.some((w) => w.totalHours > 0) ? <WeeklyVolumeChart data={stats.weekly.slice(-10)} /> : <ChartSkeleton />}
         </Card>
       </div>
 

@@ -109,6 +109,15 @@ export interface DashboardStats {
   recentActivities: ActivitySummary[];
 }
 
+export interface RouteStatsDTO {
+  distanceM?: number;
+  elevationM?: number;
+  maxElevationM?: number;
+  minElevationM?: number;
+  points?: [number, number][];
+  profile?: { d: number[]; e: number[] };
+}
+
 export interface TargetDTO {
   id: string;
   sportId: string;
@@ -120,16 +129,23 @@ export interface TargetDTO {
   elevationM: number | null;
   durationS: number | null;
   fileId: string | null;
-  routeStats: {
-    distanceM?: number;
-    elevationM?: number;
-    maxElevationM?: number;
-    minElevationM?: number;
-    points?: [number, number][];
-    profile?: { d: number[]; e: number[] };
-  } | null;
+  routeStats: RouteStatsDTO | null;
   status: "active" | "achieved" | "archived";
   createdAt: string;
+}
+
+export interface SavedRouteDTO {
+  id: string;
+  sportId: string;
+  name: string;
+  description: string | null;
+  fileId: string | null;
+  filename: string | null;
+  routeStats: RouteStatsDTO | null;
+  distanceM: number | null;
+  elevationM: number | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface PlanSessionDTO {
@@ -175,7 +191,37 @@ export interface RecommendationDTO {
   summary: string | null;
   status: "active" | "superseded" | "expired";
   planId: string | null;
+  output: {
+    name?: string;
+    goal_summary?: string;
+    rationale?: string;
+    warnings?: string[];
+  } | null;
   createdAt: string;
+}
+
+export interface CoachSessionDTO {
+  id: string;
+  title: string;
+  status: "active" | "archived";
+  messageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CoachChatMessageDTO {
+  id: string;
+  sessionId: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+}
+
+export interface RecommendationsHistoryPageDTO {
+  items: RecommendationDTO[];
+  total: number;
+  page: number;
+  pageSize: number;
 }
 
 export type AiProviderKind = "openrouter" | "custom_openai";
@@ -253,6 +299,15 @@ export interface UserProfileDTO {
   };
   stravaConnected: boolean;
   stravaLastSync: string | null;
+}
+
+export interface ActivityAnalysisDTO {
+  activityId: string;
+  content: string;
+  providerName: string | null;
+  model: string | null;
+  latencyMs: number | null;
+  createdAt: string;
 }
 
 export interface JobDTO {

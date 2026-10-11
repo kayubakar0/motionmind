@@ -100,6 +100,14 @@ export const athleteProfiles = pgTable("athlete_profiles", {
   maxHr: integer("max_hr"),
   weeklyHoursTarget: doublePrecision("weekly_hours_target"),
   experienceLevel: text("experience_level"),
+  age: integer("age"),
+  heightCm: integer("height_cm"),
+  lthr: integer("lthr"),
+  preferredDaysPerWeek: integer("preferred_days_per_week"),
+  preferredWorkoutTime: text("preferred_workout_time"),
+  hasPowerMeter: boolean("has_power_meter"),
+  hasTrainer: boolean("has_trainer"),
+  healthNotes: text("health_notes"),
   zones: jsonb("zones").$type<Record<string, number[]>>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -183,6 +191,28 @@ export const targets = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("targets_user_idx").on(t.userId, t.status)]
+);
+
+export const savedRoutes = pgTable(
+  "routes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    sportId: text("sport_id")
+      .notNull()
+      .references(() => sports.id),
+    name: text("name").notNull(),
+    description: text("description"),
+    fileId: uuid("file_id").references(() => files.id, { onDelete: "set null" }),
+    routeStats: jsonb("route_stats").$type<RouteStats>(),
+    distanceM: doublePrecision("distance_m"),
+    elevationM: doublePrecision("elevation_m"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("routes_user_idx").on(t.userId, t.createdAt)]
 );
 
 export const activities = pgTable(
@@ -356,10 +386,26 @@ export const recommendations = pgTable(
   (t) => [index("recommendations_user_idx").on(t.userId, t.createdAt)]
 );
 
+export const coachSessions = pgTable(
+  "coach_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("Sesi Baru"),
+    status: text("status").$type<"active" | "archived">().notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("coach_sessions_user_idx").on(t.userId, t.status, t.updatedAt)]
+);
+
 export const coachMessages = pgTable(
   "coach_messages",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: uuid("session_id").references(() => coachSessions.id, { onDelete: "cascade" }),
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -367,10 +413,29 @@ export const coachMessages = pgTable(
     content: text("content").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("coach_messages_user_idx").on(t.userId, t.createdAt)]
+  (t) => [index("coach_messages_user_idx").on(t.userId, t.createdAt), index("coach_messages_session_idx").on(t.sessionId, t.createdAt)]
 );
 
 export type CoachMessage = typeof coachMessages.$inferSelect;
+
+export const activityAnalyses = pgTable(
+  "activity_analyses",
+  {
+    activityId: uuid("activity_id")
+      .primaryKey()
+      .references(() => activities.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    providerName: text("provider_name"),
+    model: text("model"),
+    latencyMs: integer("latency_ms"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("activity_analyses_user_idx").on(t.userId)]
+);
 
 export const aiProviders = pgTable(
   "ai_providers",
@@ -448,6 +513,7 @@ export type Activity = typeof activities.$inferSelect;
 export type NewActivity = typeof activities.$inferInsert;
 export type Sport = typeof sports.$inferSelect;
 export type Target = typeof targets.$inferSelect;
+export type SavedRoute = typeof savedRoutes.$inferSelect;
 export type TrainingPlan = typeof trainingPlans.$inferSelect;
 export type PlanSession = typeof planSessions.$inferSelect;
 export type AiProvider = typeof aiProviders.$inferSelect;

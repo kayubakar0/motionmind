@@ -122,22 +122,27 @@ export async function buildAnalystExtras(userId: string): Promise<AnalystExtras>
   };
 }
 
-async function recentConversation(userId: string, limit = 8): Promise<ChatMessage[]> {
+const HISTORY_MESSAGE_MAX_CHARS = 1500;
+
+async function recentConversation(userId: string, sessionId: string, limit = 8): Promise<ChatMessage[]> {
   const rows = await db
     .select()
     .from(coachMessages)
-    .where(eq(coachMessages.userId, userId))
+    .where(and(eq(coachMessages.userId, userId), eq(coachMessages.sessionId, sessionId)))
     .orderBy(desc(coachMessages.createdAt))
     .limit(limit);
-  return rows.reverse().map((r) => ({ role: r.role, content: r.content }));
+  return rows.reverse().map((r) => ({
+    role: r.role,
+    content: r.content.length > HISTORY_MESSAGE_MAX_CHARS ? `${r.content.slice(0, HISTORY_MESSAGE_MAX_CHARS)}…` : r.content,
+  }));
 }
 
-export async function answerCoachQuestion(userId: string, question: string): Promise<string> {
+export async function answerCoachQuestion(userId: string, question: string, sessionId: string): Promise<string> {
   const provider = await getActiveProvider();
   const [ctx, extras] = await Promise.all([buildCoachContext(userId), buildAnalystExtras(userId)]);
   const payload: CoachContext & AnalystExtras = { ...ctx, ...extras };
 
-  const history = await recentConversation(userId);
+  const history = await recentConversation(userId, sessionId);
   const messages: ChatMessage[] = [
     { role: "system", content: ANALYST_PROMPT },
     {

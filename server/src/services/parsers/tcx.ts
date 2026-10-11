@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import { newAccum, finalizeAccum, guessSportHint, type ParsedActivityFile } from "./common";
+import { buildRouteStats, newAccum, finalizeAccum, guessSportHint, type ParsedActivityFile, type RoutePoint, type RouteStats } from "./common";
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -76,4 +76,38 @@ export function parseTcx(xml: string): ParsedActivityFile {
   const result = finalizeAccum(accum, startTime);
   result.sportHint = guessSportHint(sportText, hasPower) ?? (SPORT_MAP[sportText.trim().toLowerCase()] ?? null);
   return result;
+}
+
+/** Parse TCX rute (Courses atau Activities) menjadi statistik rute */
+export function parseTcxRoute(xml: string): RouteStats {
+  const doc = parser.parse(xml) as Record<string, unknown>;
+  const tcd = (doc.TrainingCenterDatabase ?? doc) as Record<string, unknown>;
+  const acts = asArray(tcd.Activities as Record<string, unknown>);
+  const courses = asArray(tcd.Courses as Record<string, unknown>);
+  const points: RoutePoint[] = [];
+
+  const collect = (tracks: unknown) => {
+    for (const t of asArray(tracks)) {
+      for (const tp of asArray((t as Record<string, unknown>).Trackpoint)) {
+        const pos = (tp.Position ?? null) as Record<string, unknown> | null;
+        const lat = pos ? num(pos.LatitudeDegrees) : null;
+        const lon = pos ? num(pos.LongitudeDegrees) : null;
+        if (lat == null || lon == null) continue;
+        points.push({ lat, lon, ele: num(tp.AltitudeMeters) });
+      }
+    }
+  };
+
+  const activitiesList = acts.flatMap((a) => asArray(a.Activity));
+  for (const act of activitiesList) {
+    collect((act.Laps as Record<string, unknown> | undefined)?.Lap ?? act.Lap);
+  }
+  if (points.length < 2) {
+    const courseList = courses.flatMap((cc) => asArray(cc.Course));
+    for (const course of courseList) {
+      collect(course.Track);
+    }
+  }
+  if (points.length < 2) throw new Error("TCX rute tidak berisi cukup titik GPS");
+  return buildRouteStats(points);
 }

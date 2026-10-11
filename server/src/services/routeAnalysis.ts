@@ -1,8 +1,14 @@
 import { and, eq, gte } from "drizzle-orm";
 import { db } from "../db";
-import { activities, activityMetrics, athleteProfiles, sports, type Target } from "../db/schema";
+import { activities, activityMetrics, athleteProfiles, sports, type RouteStats } from "../db/schema";
 import { ApiError } from "../http/helpers";
 import type { RouteAnalysisDTO } from "shared";
+
+export interface RouteAnalysisSource {
+  userId: string;
+  sportId: string;
+  routeStats: RouteStats | null;
+}
 
 const G = 9.81;
 const RHO = 1.225;
@@ -93,18 +99,18 @@ function feasibilityLabel(pct: number | null): { text: string; severity: "ok" | 
   return { text: "Sangat berat — perlu tuning FTP & nutrisi matang, pertimbangkan target durasi lebih longgar", severity: "hard" };
 }
 
-export async function analyzeRoute(target: Target): Promise<RouteAnalysisDTO> {
-  if (!target.routeStats) throw new ApiError(400, "Rute belum selesai diproses. Tunggu parsing GPX selesai atau unggah ulang GPX-nya.");
-  const rs = target.routeStats;
-  if (!rs.profile || rs.profile.d.length < 3) throw new ApiError(400, "Profil elevasi rute tidak tersedia — unggah ulang file GPX rute.");
+export async function analyzeRoute(src: RouteAnalysisSource): Promise<RouteAnalysisDTO> {
+  if (!src.routeStats) throw new ApiError(400, "Rute belum selesai diproses. Tunggu parsing file selesai atau unggah ulang file rutenya.");
+  const rs = src.routeStats;
+  if (!rs.profile || rs.profile.d.length < 3) throw new ApiError(400, "Profil elevasi rute tidak tersedia — unggah ulang file rute yang memuat data elevasi.");
 
   const [sportRows, profileRows] = await Promise.all([
-    db.select().from(sports).where(eq(sports.id, target.sportId)).limit(1),
-    db.select().from(athleteProfiles).where(eq(athleteProfiles.userId, target.userId)).limit(1),
+    db.select().from(sports).where(eq(sports.id, src.sportId)).limit(1),
+    db.select().from(athleteProfiles).where(eq(athleteProfiles.userId, src.userId)).limit(1),
   ]);
   const sport = sportRows[0];
   const profile = profileRows[0];
-  const sportName = sport?.name ?? target.sportId;
+  const sportName = sport?.name ?? src.sportId;
 
   const since = new Date(Date.now() - 90 * 86400000);
   const hist = await db
@@ -117,8 +123,8 @@ export async function analyzeRoute(target: Target): Promise<RouteAnalysisDTO> {
     .leftJoin(activityMetrics, eq(activityMetrics.activityId, activities.id))
     .where(
       and(
-        eq(activities.userId, target.userId),
-        eq(activities.sportId, target.sportId),
+        eq(activities.userId, src.userId),
+        eq(activities.sportId, src.sportId),
         gte(activities.startDate, since)
       )
     )
@@ -170,7 +176,7 @@ export async function analyzeRoute(target: Target): Promise<RouteAnalysisDTO> {
       targetPowerW = Math.round(powerAtSpeed(speedMs, mass, grade));
     }
   } else {
-    speedMs = (DEFAULT_SPEED_KMH[target.sportId] ?? 20) / 3.6;
+    speedMs = (DEFAULT_SPEED_KMH[src.sportId] ?? 20) / 3.6;
     basis = "default";
   }
 
@@ -220,7 +226,7 @@ export async function analyzeRoute(target: Target): Promise<RouteAnalysisDTO> {
       minElevationM: rs.minElevationM ?? null,
     },
     athlete: {
-      sportId: target.sportId,
+      sportId: src.sportId,
       sportName,
       ftp,
       weightKg: profile?.weightKg ?? null,

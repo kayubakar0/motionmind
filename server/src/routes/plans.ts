@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { Hono } from "hono";
-import { SessionStatusInput } from "shared";
+import { RegeneratePlanInput, SessionStatusInput } from "shared";
 import { db } from "../db";
-import { planSessions, sports, trainingPlans } from "../db/schema";
+import { planSessions, recommendations, sports, trainingPlans } from "../db/schema";
 import { ApiError, parseBody } from "../http/helpers";
 import { getAuthUser, requireAuth, type AppEnv } from "../middleware/auth";
 import { enqueue, hasPendingJob } from "../jobs/queue";
@@ -64,12 +64,32 @@ planRoutes.get("/:id", async (c) => {
   return c.json(await planWithSessions(c.req.param("id"), user.id));
 });
 
+planRoutes.delete("/active", async (c) => {
+  const user = getAuthUser(c);
+  const rows = await db
+    .delete(trainingPlans)
+    .where(and(eq(trainingPlans.userId, user.id), eq(trainingPlans.status, "active")))
+    .returning({ id: trainingPlans.id });
+  if (rows.length === 0) throw new ApiError(404, "Tidak ada rencana aktif untuk dihapus");
+  await db
+    .update(recommendations)
+    .set({ status: "expired" })
+    .where(and(eq(recommendations.userId, user.id), eq(recommendations.status, "active")));
+  return c.json({ ok: true, deleted: rows[0].id });
+});
+
 planRoutes.post("/regenerate", async (c) => {
   const user = getAuthUser(c);
+  const body = await parseBody(c, RegeneratePlanInput);
   if (await hasPendingJob("regenerate_plan", user.id)) {
     return c.json({ queued: true, message: "Regenerasi sudah berjalan" });
   }
-  const job = await enqueue("regenerate_plan", { userId: user.id, trigger: "manual" });
+  const job = await enqueue("regenerate_plan", {
+    userId: user.id,
+    trigger: "manual",
+    targetId: body.targetId ?? undefined,
+    sports: body.sports,
+  });
   return c.json({ queued: true, jobId: job.id });
 });
 

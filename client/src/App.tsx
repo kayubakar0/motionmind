@@ -12,6 +12,8 @@ import ActivitiesPage from "./pages/Activities";
 import ActivityDetailPage from "./pages/ActivityDetail";
 import TargetsPage from "./pages/Targets";
 import TargetAnalysisPage from "./pages/TargetAnalysis";
+import RoutesPage from "./pages/Routes";
+import RouteDetailPage from "./pages/RouteDetail";
 import PlanPage from "./pages/Plan";
 import CoachPage from "./pages/Coach";
 import SettingsPage from "./pages/Settings";
@@ -70,6 +72,8 @@ export default function App() {
             <Route path="/activities/:id" element={<ActivityDetailPage />} />
             <Route path="/targets" element={<TargetsPage />} />
             <Route path="/targets/:id/analysis" element={<TargetAnalysisPage />} />
+            <Route path="/routes" element={<RoutesPage />} />
+            <Route path="/routes/:id" element={<RouteDetailPage />} />
             <Route path="/plan" element={<PlanPage />} />
             <Route path="/coach" element={<CoachPage />} />
             <Route path="/settings" element={<SettingsPage />} />

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Upload, ChevronLeft, ChevronRight, CloudUpload, ArrowUpToLine, Trash2 } from "lucide-react";
 import type { SportDTO } from "shared";
 import { api, apiUpload } from "../lib/api";
-import { Badge, Button, Card, ErrorText, Field, Modal, PageHeader, Select, cx } from "../components/ui";
+import { Badge, Button, Card, ConfirmDialog, ErrorText, Field, Modal, PageHeader, Select, cx } from "../components/ui";
 import SportIcon from "../components/SportIcon";
 import { fmtDateShort, fmtDistance, fmtDurationShort, fmtElevation, fmtNum } from "../lib/format";
 
@@ -36,6 +36,8 @@ export default function ActivitiesPage() {
   const [page, setPage] = useState(1);
   const [sportId, setSportId] = useState("");
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [delError, setDelError] = useState<string | null>(null);
 
   const { data: sports } = useQuery({ queryKey: ["sports"], queryFn: () => api<SportRow[]>("/onboarding/sports") });
   const { data, isLoading } = useQuery({
@@ -51,17 +53,16 @@ export default function ActivitiesPage() {
   const delMut = useMutation({
     mutationFn: (id: string) => api(`/activities/${id}`, { method: "DELETE" }),
     onSuccess: () => {
+      setDeleteTarget(null);
+      setDelError(null);
       qc.invalidateQueries({ queryKey: ["activities"] });
       qc.invalidateQueries({ queryKey: ["dashboard"] });
     },
-    onError: (err) => alert(err instanceof Error ? err.message : "Gagal menghapus aktivitas"),
+    onError: (err) => {
+      setDeleteTarget(null);
+      setDelError(err instanceof Error ? err.message : "Gagal menghapus aktivitas");
+    },
   });
-
-  function confirmDelete(name: string, id: string) {
-    if (window.confirm(`Hapus "${name}"? Data aktivitas, stream, dan metriknya akan dihapus permanen.`)) {
-      delMut.mutate(id);
-    }
-  }
 
   return (
     <>
@@ -75,6 +76,8 @@ export default function ActivitiesPage() {
           </Button>
         }
       />
+
+      <ErrorText>{delError}</ErrorText>
 
       <Card className="rise d1 overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-4 py-3">
@@ -150,7 +153,7 @@ export default function ActivitiesPage() {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <button
-                        onClick={() => confirmDelete(a.name, a.id)}
+                        onClick={() => setDeleteTarget({ id: a.id, name: a.name })}
                         disabled={delMut.isPending}
                         className="rounded-md p-1.5 text-dim transition-colors hover:bg-coral/10 hover:text-coral disabled:opacity-40"
                         title="Hapus aktivitas"
@@ -179,6 +182,22 @@ export default function ActivitiesPage() {
           </div>
         </div>
       </Card>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="Hapus Aktivitas"
+        message={
+          <>
+            Aktivitas <b className="text-ink">“{deleteTarget?.name}”</b> beserta stream, metrik, dan analisisnya akan
+            dihapus permanen. Tindakan ini tidak bisa dibatalkan.
+          </>
+        }
+        confirmLabel="Hapus Permanen"
+        danger
+        loading={delMut.isPending}
+        onConfirm={() => deleteTarget && delMut.mutate(deleteTarget.id)}
+      />
 
       <UploadModal open={uploadOpen} onClose={() => setUploadOpen(false)} sports={sports ?? []} onDone={() => qc.invalidateQueries({ queryKey: ["activities"] })} />
     </>

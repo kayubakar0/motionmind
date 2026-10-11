@@ -1,11 +1,12 @@
-import { and, eq, gt, isNull, or } from "drizzle-orm";
+import { and, eq, gt, isNull, ne, or } from "drizzle-orm";
 import { randomBytes } from "node:crypto";
+import { getCookie } from "hono/cookie";
 import { Hono } from "hono";
-import { ForgotInput, LoginInput, RegisterInput, ResetInput } from "shared";
+import { ChangePasswordInput, ForgotInput, LoginInput, RegisterInput, ResetInput, UpdateProfileInput } from "shared";
 import { db } from "../db";
 import { athleteProfiles, passwordResetTokens, sessions, stravaConnections, userSports, users } from "../db/schema";
 import { ApiError, parseBody } from "../http/helpers";
-import { createSession, destroySession, getAuthUser, requireAuth, type AppEnv } from "../middleware/auth";
+import { createSession, destroySession, getAuthUser, requireAuth, SESSION_COOKIE, type AppEnv } from "../middleware/auth";
 import { sha256 } from "../lib/encrypt";
 import { env } from "../lib/env";
 
@@ -79,6 +80,43 @@ authRoutes.get("/me", requireAuth(), async (c) => {
     stravaConnected: stravaRows.length > 0,
     stravaLastSync: stravaRows[0]?.lastSyncAt?.toISOString() ?? null,
   });
+});
+
+authRoutes.patch("/profile", requireAuth(), async (c) => {
+  const user = getAuthUser(c);
+  const body = await parseBody(c, UpdateProfileInput);
+  const updates: { name?: string | null; email?: string | null } = {};
+  if (body.name !== undefined) updates.name = body.name || null;
+  if (body.email !== undefined) {
+    const email = body.email || null;
+    if (email) {
+      const taken = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.email, email), ne(users.id, user.id)))
+        .limit(1);
+      if (taken.length > 0) throw new ApiError(409, "Email sudah dipakai akun lain");
+    }
+    updates.email = email;
+  }
+  if (Object.keys(updates).length === 0) throw new ApiError(400, "Tidak ada perubahan yang dikirim");
+  const [updated] = await db.update(users).set(updates).where(eq(users.id, user.id)).returning();
+  return c.json({ id: updated.id, username: updated.username, email: updated.email, name: updated.name });
+});
+
+authRoutes.post("/change-password", requireAuth(), async (c) => {
+  const user = getAuthUser(c);
+  const body = await parseBody(c, ChangePasswordInput);
+  const valid = await Bun.password.verify(body.currentPassword, user.passwordHash);
+  if (!valid) throw new ApiError(400, "Password saat ini salah");
+  if (body.currentPassword === body.newPassword) throw new ApiError(400, "Password baru harus berbeda dari password lama");
+  const passwordHash = await Bun.password.hash(body.newPassword);
+  await db.update(users).set({ passwordHash }).where(eq(users.id, user.id));
+  const token = getCookie(c, SESSION_COOKIE);
+  if (token) {
+    await db.delete(sessions).where(and(eq(sessions.userId, user.id), ne(sessions.tokenHash, sha256(token))));
+  }
+  return c.json({ ok: true });
 });
 
 authRoutes.post("/forgot", async (c) => {

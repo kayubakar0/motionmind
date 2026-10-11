@@ -95,6 +95,87 @@ body {
   }
 }
 
+@keyframes analysis-trace {
+  0% {
+    stroke-dashoffset: 1;
+    opacity: 1;
+  }
+  62% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  86% {
+    stroke-dashoffset: 0;
+    opacity: 1;
+  }
+  100% {
+    stroke-dashoffset: 0;
+    opacity: 0;
+  }
+}
+
+@keyframes analysis-scan {
+  0% {
+    transform: translateX(-26px);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  62% {
+    transform: translateX(556px);
+    opacity: 1;
+  }
+  88% {
+    transform: translateX(556px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(556px);
+    opacity: 0;
+  }
+}
+
+@keyframes analysis-eq {
+  0%,
+  100% {
+    transform: scaleY(0.25);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@keyframes analysis-ring {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.9;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+.analysis-trace {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: analysis-trace 3s cubic-bezier(0.45, 0, 0.35, 1) infinite;
+}
+.analysis-trace-echo {
+  animation-delay: 0.28s;
+}
+.analysis-scan {
+  animation: analysis-scan 3s linear infinite;
+}
+.analysis-eq {
+  transform-origin: bottom;
+  animation: analysis-eq 0.9s ease-in-out infinite;
+}
+.analysis-ring {
+  animation: analysis-ring 2.2s ease-out infinite;
+}
+
 .rise {
   animation: rise 0.55s cubic-bezier(0.22, 0.9, 0.3, 1) both;
 }

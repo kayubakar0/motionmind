@@ -8,6 +8,7 @@ import {
   files,
   planSessions,
   recommendations,
+  savedRoutes,
   sports,
   targets,
   trainingPlans,
@@ -16,7 +17,7 @@ import {
 } from "../db/schema";
 import { registerHandler, enqueue, hasPendingJob } from "./queue";
 import { syncUserActivities, fetchAndStoreStreams, pushActivityToStrava } from "../services/strava/sync";
-import { detectFormat, parseActivityFile, parseGpxRoute } from "../services/parsers";
+import { detectFormat, parseActivityFile, parseRouteFile } from "../services/parsers";
 import { computeActivityMetrics } from "../services/metrics/compute";
 import { generatePlan, linkCompletedActivityToPlan, type PlanTrigger } from "../ai/coach";
 import { readFile } from "node:fs/promises";
@@ -117,12 +118,20 @@ registerHandler("parse_route_file", async (payload) => {
   if (!file) throw new Error("File tidak ditemukan");
   const buffer = await readFile(file.storagePath);
   const format = detectFormat(file.filename, buffer);
-  if (format !== "gpx") throw new Error("File rute harus berformat GPX");
-  const stats = parseGpxRoute(buffer.toString("utf8"));
+  const stats = await parseRouteFile(format, buffer);
   await db
     .update(targets)
     .set({ routeStats: stats })
     .where(and(eq(targets.fileId, fileId), eq(targets.userId, userId)));
+  await db
+    .update(savedRoutes)
+    .set({
+      routeStats: stats,
+      distanceM: stats.distanceM ?? null,
+      elevationM: stats.elevationM ?? null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(savedRoutes.fileId, fileId), eq(savedRoutes.userId, userId)));
 });
 
 registerHandler("compute_activity_metrics", async (payload) => {
@@ -158,6 +167,8 @@ registerHandler("compute_activity_metrics", async (payload) => {
     ftp: profile?.ftp ?? null,
     maxHr: profile?.maxHr ?? null,
     restingHr: profile?.restingHr ?? null,
+    age: profile?.age ?? null,
+    lthr: profile?.lthr ?? null,
     elapsedS: activity.elapsedTimeS ?? activity.movingTimeS ?? streams?.time?.length ?? 0,
     movingTimeS: activity.movingTimeS,
     distanceM: activity.distanceM ?? null,
@@ -175,8 +186,9 @@ registerHandler("regenerate_plan", async (payload, ctx) => {
   const userId = payload.userId as string;
   const trigger = (payload.trigger as PlanTrigger) ?? "manual";
   const targetId = payload.targetId as string | undefined;
+  const sports = Array.isArray(payload.sports) ? (payload.sports as string[]) : undefined;
   try {
-    await generatePlan(userId, trigger, { targetId });
+    await generatePlan(userId, trigger, { targetId, sports });
   } catch (err) {
     if (ctx.attempts >= ctx.maxAttempts) {
       const message = err instanceof Error ? err.message : String(err);

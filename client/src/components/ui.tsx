@@ -1,4 +1,4 @@
-import type { ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { ComponentPropsWithRef, ReactNode, ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes } from "react";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -140,7 +140,7 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
   return <input className={cx(inputBase, className)} {...rest} />;
 }
 
-export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea({ className, ...rest }: ComponentPropsWithRef<"textarea">) {
   return <textarea className={cx(inputBase, "min-h-[84px] resize-y", className)} {...rest} />;
 }
 
@@ -202,4 +202,40 @@ export function Modal({
 export function ErrorText({ children }: { children?: string | null }) {
   if (!children) return null;
   return <p className="mt-2 rounded-lg border border-coral/30 bg-coral/10 px-3 py-2 text-xs text-coral">{children}</p>;
+}
+
+export function ConfirmDialog({
+  open,
+  onClose,
+  title,
+  message,
+  confirmLabel = "Konfirmasi",
+  cancelLabel = "Batal",
+  danger,
+  loading,
+  onConfirm,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  message: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  danger?: boolean;
+  loading?: boolean;
+  onConfirm: () => void;
+}) {
+  return (
+    <Modal open={open} onClose={onClose} title={title}>
+      <div className="text-sm leading-relaxed text-mute">{message}</div>
+      <div className="mt-6 flex justify-end gap-2">
+        <Button variant="ghost" onClick={onClose} disabled={loading}>
+          {cancelLabel}
+        </Button>
+        <Button variant={danger ? "danger" : "primary"} loading={loading} onClick={onConfirm}>
+          {confirmLabel}
+        </Button>
+      </div>
+    </Modal>
+  );
 }

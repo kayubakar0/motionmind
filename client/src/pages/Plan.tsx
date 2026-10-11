@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router";
-import { Check, X, RefreshCw, CalendarDays, HeartPulse, Info, PencilLine } from "lucide-react";
-import type { PlanSessionDTO, TrainingPlanDTO } from "shared";
+import { Check, X, RefreshCw, CalendarDays, HeartPulse, Info, PencilLine, Trash2, Sparkles, AlertTriangle } from "lucide-react";
+import type { PlanSessionDTO, RecommendationDTO, SportDTO, TrainingPlanDTO, UserProfileDTO } from "shared";
 import { api } from "../lib/api";
-import { Badge, Button, Card, EmptyState, ErrorText, Field, Modal, PageHeader, Select, Textarea, cx } from "../components/ui";
+import { Badge, Button, Card, EmptyState, ErrorText, Field, Modal, PageHeader, Select, Spinner, Textarea, cx } from "../components/ui";
 import { Markdown } from "../components/Markdown";
 import { ChevronRight } from "lucide-react";
 import SportIcon from "../components/SportIcon";
@@ -42,12 +42,44 @@ const CATEGORY_TONE: Record<string, string> = {
 export default function PlanPage() {
   const qc = useQueryClient();
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [genOpen, setGenOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [skipFor, setSkipFor] = useState<PlanSessionDTO | null>(null);
   const [detailSession, setDetailSession] = useState<PlanSessionDTO | null>(null);
   const { data: plan, isLoading } = useQuery({
     queryKey: ["plan"],
     queryFn: () => api<TrainingPlanDTO | null>("/plans/active"),
   });
+
+  const { data: genStatus } = useQuery({
+    queryKey: ["coach-status"],
+    queryFn: () => api<{ pending: boolean }>("/coach/status"),
+    refetchInterval: (q) => (q.state.data?.pending ? 5000 : false),
+  });
+  const generating = genStatus?.pending ?? false;
+
+  const wasGenerating = useRef(false);
+  useEffect(() => {
+    if (generating) {
+      wasGenerating.current = true;
+    } else if (wasGenerating.current) {
+      wasGenerating.current = false;
+      qc.invalidateQueries({ queryKey: ["plan"] });
+      qc.invalidateQueries({ queryKey: ["recommendations"] });
+    }
+  }, [generating, qc]);
+
+  const { data: recs } = useQuery({
+    queryKey: ["recommendations"],
+    queryFn: () => api<RecommendationDTO[]>("/coach/recommendations"),
+    enabled: !isLoading && !plan && !generating,
+  });
+  const lastFailure = recs?.find(
+    (r) =>
+      r.status === "expired" &&
+      r.summary?.startsWith("Gagal menyusun rencana") &&
+      Date.now() - new Date(r.createdAt).getTime() < 30 * 60_000
+  );
 
   const sessionMut = useMutation({
     mutationFn: ({ id, status, reason }: { id: string; status: string; reason?: string | null }) =>
@@ -57,9 +89,14 @@ export default function PlanPage() {
     },
   });
 
-  const regenMut = useMutation({
-    mutationFn: () => api("/plans/regenerate", { method: "POST" }),
-    onSuccess: () => setTimeout(() => qc.invalidateQueries({ queryKey: ["plan"] }), 15000),
+  const deleteMut = useMutation({
+    mutationFn: () => api<{ ok: boolean }>("/plans/active", { method: "DELETE" }),
+    onSuccess: () => {
+      setDeleteOpen(false);
+      qc.invalidateQueries({ queryKey: ["plan"] });
+      qc.invalidateQueries({ queryKey: ["recommendations"] });
+      qc.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 
   if (isLoading) return <div className="p-10 text-center text-sm text-dim">Memuat rencana…</div>;
@@ -68,16 +105,47 @@ export default function PlanPage() {
     return (
       <>
         <PageHeader kicker="Rencana Latihan" title="Rencana" />
-        <EmptyState
-          icon={<CalendarDays size={28} />}
-          title="Belum ada rencana aktif"
-          sub="Buat target terlebih dahulu, lalu AI coach akan menyusun rencana latihan mingguan yang dipersonalisasi."
-          action={
-            <Link to="/targets">
-              <Button>Buat Target</Button>
-            </Link>
-          }
-        />
+        {generating ? (
+          <Card className="rise p-10 text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-volt/30 bg-volt/10 text-volt">
+              <Spinner size={22} />
+            </div>
+            <div className="font-display text-sm font-semibold uppercase tracking-wider">AI Coach sedang menyusun rencanamu…</div>
+            <p className="mx-auto mt-2 max-w-sm text-sm text-dim">
+              Coach sedang menghitung beban, pemulihan, dan jadwal untuk olahraga pilihanmu. Halaman ini akan diperbarui otomatis — biasanya
+              kurang dari satu menit.
+            </p>
+          </Card>
+        ) : (
+          <>
+            <EmptyState
+              icon={<CalendarDays size={28} />}
+              title="Belum ada rencana aktif"
+              sub="Pilih olahraga yang ingin dilatih, lalu AI coach akan menyusun rencana latihan mingguan yang dipersonalisasi. Buat target agar rencana lebih terfokus."
+              action={
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <Button onClick={() => setGenOpen(true)}>
+                    <Sparkles size={13} /> Susun Rencana
+                  </Button>
+                  <Link to="/targets">
+                    <Button variant="outline">Buat Target</Button>
+                  </Link>
+                </div>
+              }
+            />
+            {lastFailure && (
+              <Card className="rise d1 mt-4 flex items-start gap-3 border-amber2/30 bg-amber2/5 p-4">
+                <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber2" />
+                <div className="min-w-0 text-[12px]">
+                  <div className="font-semibold text-amber2">Percobaan penyusunan terakhir gagal</div>
+                  <p className="mt-0.5 text-mute">{lastFailure.summary}</p>
+                  <p className="mt-1 text-dim">Coba tekan "Susun Rencana" lagi — kalau berulang, periksa konfigurasi AI provider di menu Admin.</p>
+                </div>
+              </Card>
+            )}
+          </>
+        )}
+        <GenerateModal open={genOpen} onClose={() => setGenOpen(false)} />
       </>
     );
   }
@@ -110,12 +178,29 @@ export default function PlanPage() {
             <Button variant="outline" onClick={() => setFeedbackOpen(true)}>
               <HeartPulse size={13} /> Lapor Kondisi
             </Button>
-            <Button loading={regenMut.isPending} onClick={() => regenMut.mutate()}>
+            <Button variant="outline" onClick={() => setGenOpen(true)}>
               <RefreshCw size={13} /> Regenerasi
+            </Button>
+            <Button variant="danger" onClick={() => setDeleteOpen(true)}>
+              <Trash2 size={13} /> Hapus
             </Button>
           </>
         }
       />
+
+      {generating && (
+        <Card className="rise mb-4 flex items-center gap-3 border-volt/30 bg-volt/5 p-3.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-volt/30 bg-volt/10 text-volt">
+            <Spinner size={16} />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold text-volt">AI Coach sedang menyesuaikan rencana…</div>
+            <div className="text-[11px] text-dim">
+              Rencana baru akan menggantikan versi ini otomatis setelah selesai — sesi masa lalu yang sudah selesai tetap dipertahankan.
+            </div>
+          </div>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Card className="rise d1 p-4">
@@ -275,6 +360,27 @@ export default function PlanPage() {
       </div>
 
       <FeedbackModal open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+
+      <GenerateModal open={genOpen} onClose={() => setGenOpen(false)} />
+
+      <Modal open={deleteOpen} onClose={() => setDeleteOpen(false)} title="Hapus Rencana">
+        <p className="text-sm text-mute">
+          Rencana aktif <b className="font-semibold text-ink">{plan.name}</b> beserta seluruh sesi latihannya akan dihapus permanen. Riwayat
+          aktivitas dan progres kebugaran tetap tersimpan.
+        </p>
+        <p className="mt-3 rounded-lg border border-amber2/30 bg-amber2/10 px-3 py-2 text-[11px] text-amber2">
+          Setelah dihapus, kamu bisa langsung menyusun rencana baru dengan pilihan olahraga yang diinginkan.
+        </p>
+        <ErrorText>{deleteMut.error instanceof Error ? deleteMut.error.message : null}</ErrorText>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="ghost" className="w-full sm:w-auto" onClick={() => setDeleteOpen(false)}>
+            Batal
+          </Button>
+          <Button variant="danger" className="w-full sm:w-auto" loading={deleteMut.isPending} onClick={() => deleteMut.mutate()}>
+            <Trash2 size={13} /> Hapus Permanen
+          </Button>
+        </div>
+      </Modal>
 
       <SessionDetailModal
         session={detailSession}
@@ -456,6 +562,110 @@ function FeedbackModal({ open, onClose }: { open: boolean; onClose: () => void }
           Kirim & Minta Penyesuaian
         </Button>
       </div>
+    </Modal>
+  );
+}
+
+function GenerateModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [selected, setSelected] = useState<string[] | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const { data: allSports } = useQuery({
+    queryKey: ["sports"],
+    queryFn: () => api<SportDTO[]>("/onboarding/sports"),
+    enabled: open,
+  });
+  const { data: me } = useQuery({
+    queryKey: ["me"],
+    queryFn: () => api<UserProfileDTO>("/auth/me"),
+    enabled: open,
+  });
+
+  useEffect(() => {
+    if (open && me && selected === null) {
+      setSelected(me.sports.length > 0 ? me.sports : []);
+    }
+  }, [open, me, selected]);
+
+  const mut = useMutation({
+    mutationFn: () =>
+      api<{ queued: boolean; message?: string }>("/plans/regenerate", {
+        method: "POST",
+        json: { sports: selected ?? [] },
+      }),
+    onSuccess: (res) => {
+      if (res.message) {
+        setInfo(res.message);
+        return;
+      }
+      onClose();
+      qc.invalidateQueries({ queryKey: ["coach-status"] });
+      qc.invalidateQueries({ queryKey: ["recommendations"] });
+      setTimeout(() => qc.invalidateQueries({ queryKey: ["coach-status"] }), 60_000);
+    },
+    onError: (err) => setError(err instanceof Error ? err.message : "Gagal meminta penyusunan rencana"),
+  });
+
+  return (
+    <Modal open={open} onClose={onClose} title={info ? "Regenerasi Berjalan" : "Susun Rencana Baru"}>
+      {info ? (
+        <>
+          <p className="rounded-lg border border-aqua/30 bg-aqua/10 px-3 py-2 text-xs text-aqua">{info}</p>
+          <p className="mt-3 text-xs text-dim">
+            Rencana baru akan muncul otomatis setelah AI selesai menyusun — biasanya kurang dari satu menit.
+          </p>
+          <div className="mt-5 flex justify-end">
+            <Button onClick={onClose}>Tutup</Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="mb-4 text-xs text-dim">
+            Pilih olahraga yang ingin dimasukkan AI coach ke dalam rencana. Sesi masa lalu yang sudah selesai atau terlewat tetap dipertahankan.
+          </p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {(allSports ?? []).map((s) => {
+              const active = (selected ?? []).includes(s.id);
+              return (
+                <button
+                  key={s.id}
+                  onClick={() =>
+                    setSelected((prev) => {
+                      const cur = prev ?? [];
+                      return cur.includes(s.id) ? cur.filter((x) => x !== s.id) : [...cur, s.id];
+                    })
+                  }
+                  className={cx(
+                    "flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-[12px] font-medium transition-all",
+                    active ? "border-volt/50 bg-volt/10 text-volt" : "border-line2 bg-bg text-mute hover:text-ink"
+                  )}
+                >
+                  <SportIcon icon={s.icon} size={15} />
+                  <span className="truncate">{s.name}</span>
+                </button>
+              );
+            })}
+          </div>
+          {selected !== null && selected.length === 0 && (
+            <p className="mt-2 text-[11px] text-amber2">Pilih minimal satu olahraga.</p>
+          )}
+          <ErrorText>{error}</ErrorText>
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="ghost" className="w-full sm:w-auto" onClick={onClose}>
+              Batal
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              loading={mut.isPending}
+              disabled={!selected || selected.length === 0}
+              onClick={() => mut.mutate()}
+            >
+              <Sparkles size={13} /> Susun Rencana
+            </Button>
+          </div>
+        </>
+      )}
     </Modal>
   );
 }

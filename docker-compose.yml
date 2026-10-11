@@ -31,7 +31,7 @@ services:
     restart: "no"
     logging: *logging
     env_file: .env
-    command: ["sh", "-c", "cd /app/server && node ../node_modules/drizzle-kit/bin.cjs push --force && bun src/db/seed.ts"]
+    command: ["sh", "-c", "cd /app/server && node node_modules/drizzle-kit/bin.cjs push --force && bun src/db/seed.ts"]
     depends_on:
       db:
         condition: service_healthy

@@ -7,7 +7,7 @@ import { ApiError, parseBody } from "../http/helpers";
 import { getAuthUser, requireAuth, type AppEnv } from "../middleware/auth";
 import { enqueue, hasPendingJob } from "../jobs/queue";
 import { getConnection } from "../services/strava/client";
-import { afterActivityCreated } from "../jobs/handlers";
+import { afterActivityCreated } from "../ai/coach";
 import { analyzeActivity, getActivityAnalysis } from "../ai/activityAnalyst";
 
 export const activityRoutes = new Hono<AppEnv>();
@@ -151,7 +151,7 @@ activityRoutes.post("/manual", async (c) => {
     .returning();
 
   await enqueue("compute_activity_metrics", { activityId: row.id });
-  await afterActivityCreated(user.id, row.id, body.sportId);
+  await afterActivityCreated(user.id, row.id);
 
   if (user.id && (await getConnection(user.id)) && sport.stravaType) {
     await enqueue("strava_push_activity", { userId: user.id, activityId: row.id });

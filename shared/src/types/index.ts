@@ -148,6 +148,14 @@ export interface SavedRouteDTO {
   updatedAt: string;
 }
 
+export interface PlanSessionActualDTO {
+  activityId: string;
+  name: string;
+  durationS: number | null;
+  distanceM: number | null;
+  tss: number | null;
+}
+
 export interface PlanSessionDTO {
   id: string;
   planId: string;
@@ -165,6 +173,9 @@ export interface PlanSessionDTO {
   tssPlanned: number | null;
   status: PlanSessionStatus;
   reason: string | null;
+  completedActivityId: string | null;
+  completedAt: string | null;
+  actual: PlanSessionActualDTO | null;
 }
 
 export interface TrainingPlanDTO {

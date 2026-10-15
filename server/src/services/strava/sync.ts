@@ -1,7 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db } from "../../db";
 import { activities, activityStreams, sports, type NewActivity, type ParsedStreams } from "../../db/schema";
-import { enqueue } from "../../jobs/queue";
+import { enqueue, hasPendingJob } from "../../jobs/queue";
+import { linkCompletedActivityToPlan } from "../../ai/coach";
 import {
   getValidAccessToken,
   stravaGet,
@@ -143,6 +144,7 @@ export async function syncUserActivities(userId: string, opts: { backfill?: bool
       imported++;
       streamsQueued++;
       await enqueue("fetch_strava_stream", { userId, activityId: row.id, externalId });
+      await linkCompletedActivityToPlan(userId, row.id);
     }
 
     if (items.length < perPage) break;
@@ -151,6 +153,9 @@ export async function syncUserActivities(userId: string, opts: { backfill?: bool
 
   const { stravaConnections } = await import("../../db/schema");
   await db.update(stravaConnections).set({ lastSyncAt: new Date() }).where(eq(stravaConnections.userId, userId));
+  if (imported > 0 && !(await hasPendingJob("regenerate_plan", userId))) {
+    await enqueue("regenerate_plan", { userId, trigger: "new_activity" }, new Date(Date.now() + 10_000));
+  }
   return { imported, streamsQueued };
 }
 

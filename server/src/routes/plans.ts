@@ -1,8 +1,9 @@
 import { and, eq } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { Hono } from "hono";
 import { RegeneratePlanInput, SessionStatusInput } from "shared";
 import { db } from "../db";
-import { planSessions, recommendations, sports, trainingPlans } from "../db/schema";
+import { activities, activityMetrics, planSessions, recommendations, sports, trainingPlans } from "../db/schema";
 import { ApiError, parseBody } from "../http/helpers";
 import { getAuthUser, requireAuth, type AppEnv } from "../middleware/auth";
 import { enqueue, hasPendingJob } from "../jobs/queue";
@@ -10,6 +11,8 @@ import { enqueue, hasPendingJob } from "../jobs/queue";
 export const planRoutes = new Hono<AppEnv>();
 
 planRoutes.use("*", requireAuth());
+
+const completedActivity = alias(activities, "completed_activity");
 
 async function planWithSessions(planId: string, userId: string) {
   const rows = await db
@@ -20,9 +23,21 @@ async function planWithSessions(planId: string, userId: string) {
   if (rows.length === 0) throw new ApiError(404, "Rencana tidak ditemukan");
   const plan = rows[0];
   const sessions = await db
-    .select({ session: planSessions, sportName: sports.name, sportIcon: sports.icon, sportCategory: sports.category })
+    .select({
+      session: planSessions,
+      sportName: sports.name,
+      sportIcon: sports.icon,
+      sportCategory: sports.category,
+      actName: completedActivity.name,
+      actMovingS: completedActivity.movingTimeS,
+      actElapsedS: completedActivity.elapsedTimeS,
+      actDistanceM: completedActivity.distanceM,
+      actTss: activityMetrics.tss,
+    })
     .from(planSessions)
     .leftJoin(sports, eq(sports.id, planSessions.sportId))
+    .leftJoin(completedActivity, eq(completedActivity.id, planSessions.completedActivityId))
+    .leftJoin(activityMetrics, eq(activityMetrics.activityId, planSessions.completedActivityId))
     .where(eq(planSessions.planId, planId))
     .orderBy(planSessions.date);
   return {
@@ -31,9 +46,19 @@ async function planWithSessions(planId: string, userId: string) {
     updatedAt: plan.updatedAt.toISOString(),
     sessions: sessions.map((s) => ({
       ...s.session,
+      completedAt: s.session.completedAt ? s.session.completedAt.toISOString() : null,
       sportName: s.sportName ?? s.session.sportId,
       sportIcon: s.sportIcon ?? "activity",
       sportCategory: s.sportCategory ?? "other",
+      actual: s.session.completedActivityId
+        ? {
+            activityId: s.session.completedActivityId,
+            name: s.actName ?? "Aktivitas",
+            durationS: s.actMovingS ?? s.actElapsedS ?? null,
+            distanceM: s.actDistanceM ?? null,
+            tss: s.actTss ?? null,
+          }
+        : null,
     })),
   };
 }

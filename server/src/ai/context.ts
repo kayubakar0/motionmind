@@ -58,7 +58,12 @@ export interface CoachContext {
     name: string;
     status: string;
     workoutType: string;
+    durationPlannedMin: number | null;
+    durationActualMin: number | null;
+    distancePlannedKm: number | null;
+    distanceActualKm: number | null;
     tssPlanned: number | null;
+    tssActual: number | null;
     reason: string | null;
   }>;
   targets: Array<{
@@ -166,11 +171,19 @@ export async function buildCoachContext(userId: string, opts: { sports?: string[
       title: planSessions.title,
       status: planSessions.status,
       workoutType: planSessions.workoutType,
+      durationPlannedS: planSessions.durationPlannedS,
+      distancePlannedM: planSessions.distancePlannedM,
       tssPlanned: planSessions.tssPlanned,
       reason: planSessions.reason,
+      actualMovingS: activities.movingTimeS,
+      actualElapsedS: activities.elapsedTimeS,
+      actualDistanceM: activities.distanceM,
+      actualTss: activityMetrics.tss,
     })
     .from(planSessions)
     .innerJoin(trainingPlans, eq(trainingPlans.id, planSessions.planId))
+    .leftJoin(activities, eq(activities.id, planSessions.completedActivityId))
+    .leftJoin(activityMetrics, eq(activityMetrics.activityId, planSessions.completedActivityId))
     .where(
       and(
         eq(planSessions.userId, userId),
@@ -237,15 +250,23 @@ export async function buildCoachContext(userId: string, opts: { sports?: string[
         bySport: bySport30d,
       },
     },
-    recentSessions: sessionRows.map((s) => ({
-      date: s.date,
-      sportId: s.sportId,
-      name: s.title,
-      status: s.status,
-      workoutType: s.workoutType,
-      tssPlanned: s.tssPlanned,
-      reason: s.reason ?? null,
-    })),
+    recentSessions: sessionRows.map((s) => {
+      const actualS = s.actualMovingS ?? s.actualElapsedS ?? null;
+      return {
+        date: s.date,
+        sportId: s.sportId,
+        name: s.title,
+        status: s.status,
+        workoutType: s.workoutType,
+        durationPlannedMin: s.durationPlannedS != null ? Math.round(s.durationPlannedS / 60) : null,
+        durationActualMin: actualS != null ? Math.round(actualS / 60) : null,
+        distancePlannedKm: s.distancePlannedM != null ? Math.round(s.distancePlannedM / 100) / 10 : null,
+        distanceActualKm: s.actualDistanceM != null ? Math.round(s.actualDistanceM / 100) / 10 : null,
+        tssPlanned: s.tssPlanned != null ? Math.round(s.tssPlanned) : null,
+        tssActual: s.actualTss != null ? Math.round(s.actualTss) : null,
+        reason: s.reason ?? null,
+      };
+    }),
     targets: targetRows.map((t) => ({
       id: t.id,
       name: t.name,

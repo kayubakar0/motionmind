@@ -299,6 +299,25 @@ export default function PlanPage() {
                           Alasan: {s.reason}
                         </div>
                       )}
+                      {s.status === "completed" && s.actual && (
+                        <Link
+                          to={`/activities/${s.actual.activityId}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="mt-1 flex w-fit max-w-full items-center gap-1.5 truncate rounded border border-volt/25 bg-volt/10 px-2 py-0.5 text-[10px] text-volt transition-colors hover:bg-volt/20"
+                          title={`Aktivitas: ${s.actual.name}`}
+                        >
+                          <Check size={11} className="shrink-0" />
+                          <span className="truncate font-medium">{s.actual.name}</span>
+                          {s.actual.durationS != null && <span className="num shrink-0">· {fmtDurationShort(s.actual.durationS)}</span>}
+                          {s.actual.distanceM != null && <span className="num shrink-0">· {fmtDistance(s.actual.distanceM)}</span>}
+                          {s.actual.tss != null && (
+                            <span className="num shrink-0">
+                              · TSS {fmtNum(s.actual.tss)}
+                              {s.tssPlanned != null ? ` / ${fmtNum(s.tssPlanned)}` : ""}
+                            </span>
+                          )}
+                        </Link>
+                      )}
                     </div>
                   </div>
                   <div className="num hidden shrink-0 gap-3 text-[12px] text-mute md:flex">
@@ -685,12 +704,32 @@ function SessionDetailModal({
 }) {
   if (!session) return null;
   const isPlanned = session.status === "planned";
+  const hasActual = session.status === "completed" && session.actual != null;
   const cells: Array<[string, string]> = [
     ["Durasi", session.durationPlannedS ? fmtDurationShort(session.durationPlannedS) : "—"],
     ["Jarak", session.distancePlannedM ? fmtDistance(session.distancePlannedM) : "—"],
     ["TSS rencana", session.tssPlanned != null ? fmtNum(session.tssPlanned) : "—"],
     ["Intensitas", session.intensityTargets?.join(", ") || "—"],
   ];
+  const comparison: Array<[string, string, string]> = hasActual
+    ? [
+        [
+          "Durasi",
+          session.durationPlannedS ? fmtDurationShort(session.durationPlannedS) : "—",
+          session.actual!.durationS != null ? fmtDurationShort(session.actual!.durationS) : "—",
+        ],
+        [
+          "Jarak",
+          session.distancePlannedM ? fmtDistance(session.distancePlannedM) : "—",
+          session.actual!.distanceM != null ? fmtDistance(session.actual!.distanceM) : "—",
+        ],
+        [
+          "TSS",
+          session.tssPlanned != null ? fmtNum(session.tssPlanned) : "—",
+          session.actual!.tss != null ? fmtNum(session.actual!.tss) : "—",
+        ],
+      ]
+    : [];
   return (
     <Modal open onClose={onClose} title={session.title} wide>
       <div className="flex flex-wrap items-center gap-2.5">
@@ -708,14 +747,42 @@ function SessionDetailModal({
         <Badge tone={TYPE_TONE[session.workoutType] ?? "neutral"}>{WORKOUT_TYPE_LABEL[session.workoutType] ?? session.workoutType}</Badge>
       </div>
 
-      <div className="num mt-4 grid grid-cols-2 gap-2 text-[13px] sm:grid-cols-4">
-        {cells.map(([label, value]) => (
-          <div key={label} className="rounded-lg border border-line bg-bg px-3 py-2">
-            <div className="text-[9px] uppercase tracking-[0.14em] text-dim">{label}</div>
-            <div className="mt-0.5 font-semibold">{value}</div>
+      {hasActual ? (
+        <div className="num mt-4 overflow-hidden rounded-lg border border-line">
+          <div className="grid grid-cols-3 bg-surface2 px-3 py-1.5 text-[9px] uppercase tracking-[0.14em] text-dim">
+            <div>Metrik</div>
+            <div>Rencana</div>
+            <div className="text-volt/80">Aktual</div>
           </div>
-        ))}
-      </div>
+          {comparison.map(([label, planned, actual]) => (
+            <div key={label} className="grid grid-cols-3 border-t border-line px-3 py-2 text-[13px]">
+              <div className="text-mute">{label}</div>
+              <div>{planned}</div>
+              <div className="font-semibold text-volt">{actual}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="num mt-4 grid grid-cols-2 gap-2 text-[13px] sm:grid-cols-4">
+          {cells.map(([label, value]) => (
+            <div key={label} className="rounded-lg border border-line bg-bg px-3 py-2">
+              <div className="text-[9px] uppercase tracking-[0.14em] text-dim">{label}</div>
+              <div className="mt-0.5 font-semibold">{value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {session.actual && (
+        <div className="mt-3">
+          <Link
+            to={`/activities/${session.actual.activityId}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-volt/30 bg-volt/10 px-3 py-1.5 text-[12px] font-medium text-volt transition-colors hover:bg-volt/20"
+          >
+            Lihat aktivitas: {session.actual.name} <ChevronRight size={13} />
+          </Link>
+        </div>
+      )}
 
       <div className="mt-4">
         <div className="label-tech mb-2">Instruksi Sesi</div>

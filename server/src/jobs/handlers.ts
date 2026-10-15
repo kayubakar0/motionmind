@@ -19,7 +19,7 @@ import { registerHandler, enqueue, hasPendingJob } from "./queue";
 import { syncUserActivities, fetchAndStoreStreams, pushActivityToStrava } from "../services/strava/sync";
 import { detectFormat, parseActivityFile, parseRouteFile } from "../services/parsers";
 import { computeActivityMetrics } from "../services/metrics/compute";
-import { generatePlan, linkCompletedActivityToPlan, type PlanTrigger } from "../ai/coach";
+import { afterActivityCreated, generatePlan, type PlanTrigger } from "../ai/coach";
 import { readFile } from "node:fs/promises";
 
 registerHandler("sync_strava_activities", async (payload) => {
@@ -109,6 +109,7 @@ registerHandler("parse_activity_file", async (payload) => {
   });
 
   await enqueue("compute_activity_metrics", { activityId });
+  await afterActivityCreated(userId, activityId);
 });
 
 registerHandler("parse_route_file", async (payload) => {
@@ -260,15 +261,3 @@ registerHandler("recompute_all", async (payload) => {
     }
   }
 });
-
-export async function afterActivityCreated(userId: string, activityId: string, sportId: string) {
-  await linkCompletedActivityToPlan(userId, activityId);
-  void sportId;
-  if (!(await hasPendingJob("regenerate_plan", userId))) {
-    await enqueue(
-      "regenerate_plan",
-      { userId, trigger: "new_activity" },
-      new Date(Date.now() + 10_000)
-    );
-  }
-}

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "../db";
 import {
   activities,
@@ -9,6 +9,7 @@ import {
   userSports,
 } from "../db/schema";
 import { ApiError } from "../http/helpers";
+import { enqueue, hasPendingJob } from "../jobs/queue";
 import { chatComplete, getActiveProvider, type ChatMessage } from "./provider";
 import { buildCoachContext, type CoachContext } from "./context";
 import { PlanOutputSchema, type PlanOutput } from "shared";
@@ -23,6 +24,7 @@ Prinsip:
 - Jika ada tanggal target (event/race), lakukan tapering 7-10 hari sebelum tanggal target, lalu sesi race/event pada tanggal tersebut.
 - Hormati availability jam per minggu atlet. Jangan melebihi total yang realistis.
 - Jika ada sesi yang terlewat, jangan "menghukum" atlet: sesuaikan beban, lanjutkan secara progresif dari kondisi saat ini.
+- BANDINGKAN RENCANA vs REALISASI: sesi berstatus "completed" pada recentSessions menyertakan nilai rencana (durationPlannedMin, tssPlanned) dan realisasi dari aktivitas aslinya (durationActualMin, tssActual). Jika realisasi jauh di bawah rencana (mis. durasi <70% atau TSS <60% dari rencana), jangan anggap sesi tercapai penuh — akui deviasinya di rationale dan sesuaikan beban sesi berikutnya. Jika realisasi konsisten melebihi rencana, progresi boleh sedikit lebih agresif. Nilai null berarti data tidak tersedia — jangan mengarang.
 - BACA ALASAN: recentSessions dapat menyertakan field "reason" (alasan atlet melewati/menandai sesi) — perhatikan alasannya, akui secara eksplisit di rationale/warnings, dan sesuaikan rencana berdasarkan penyebabnya (mis. sakit → kurangi beban bertahap sampai kondisinya pulih; tidak ada waktu → kompres durasi sesi; perangkat/batal → substitusi olahraga).
 - Jika CTL rendah / atlet pemula, mulai dari volume ringan.
 - Jika feedback menunjukkan kelelahan tinggi (fatigue level tinggi), kurangi beban dan prioritaskan recovery.
@@ -307,56 +309,74 @@ export async function generatePlan(
   });
 }
 
-/** Dipanggil saat aktivitas baru selesai — sesi rencana yang cocok otomatis ditandai selesai,
- *  lalu rencana disesuaikan secara dinamis bila diperlukan. */
+const sportCategoryCache = new Map<string, string[]>();
+
+/** Dipanggil saat aktivitas baru dibuat (manual, upload file, sinkron Strava) — sesi rencana yang
+ *  cocok otomatis ditandai selesai. Sesi yang sempat tercatat "missed" karena aktivitas diunggah
+ *  terlambat juga dihubungkan kembali sehingga statusnya kembali "completed". */
 export async function linkCompletedActivityToPlan(userId: string, activityId: string): Promise<void> {
   const rows = await db
-    .select({ activity: activities })
+    .select({ activity: activities, category: sports.category })
     .from(activities)
+    .leftJoin(sports, eq(sports.id, activities.sportId))
     .where(and(eq(activities.id, activityId), eq(activities.userId, userId)))
     .limit(1);
   if (!rows.length) return;
   const activity = rows[0].activity;
   const dateStr = `${activity.startDate.getFullYear()}-${String(activity.startDate.getMonth() + 1).padStart(2, "0")}-${String(activity.startDate.getDate()).padStart(2, "0")}`;
 
-  const candidates = await db
-    .select({ id: planSessions.id })
-    .from(planSessions)
-    .where(
-      and(
-        eq(planSessions.userId, userId),
-        eq(planSessions.date, dateStr),
-        eq(planSessions.sportId, activity.sportId),
-        eq(planSessions.status, "planned")
-      )
-    )
-    .limit(1);
-
-  if (candidates.length > 0) {
-    await db
-      .update(planSessions)
-      .set({ status: "completed", completedActivityId: activityId, completedAt: new Date() })
-      .where(eq(planSessions.id, candidates[0].id));
-    return;
+  let sportIds = sportCategoryCache.get(activity.sportId);
+  if (!sportIds) {
+    sportIds = [activity.sportId];
+    if (rows[0].category) {
+      const sameCategory = await db.select({ id: sports.id }).from(sports).where(eq(sports.category, rows[0].category));
+      for (const s of sameCategory) if (!sportIds.includes(s.id)) sportIds.push(s.id);
+    }
+    sportCategoryCache.set(activity.sportId, sportIds);
   }
 
-  // fallback: tandai sesi planned dalam rentang 1 hari dengan sport sama
-  const near = await db
-    .select({ id: planSessions.id })
-    .from(planSessions)
-    .where(
-      and(
-        eq(planSessions.userId, userId),
-        eq(planSessions.sportId, activity.sportId),
-        eq(planSessions.status, "planned"),
-        sql`abs((${planSessions.date}::date - ${dateStr}::date)) <= 1`
+  const dateDistance = sql`abs((${planSessions.date}::date - ${dateStr}::date))`;
+  const plannedFirst = sql`case when ${planSessions.status} = 'planned' then 0 else 1 end`;
+
+  const findSession = async (statuses: Array<"planned" | "missed">, maxDayDiff: number) => {
+    const found = await db
+      .select({ id: planSessions.id })
+      .from(planSessions)
+      .innerJoin(trainingPlans, eq(trainingPlans.id, planSessions.planId))
+      .where(
+        and(
+          eq(planSessions.userId, userId),
+          eq(trainingPlans.status, "active"),
+          inArray(planSessions.status, statuses),
+          inArray(planSessions.sportId, sportIds),
+          sql`${dateDistance} <= ${maxDayDiff}`
+        )
       )
-    )
-    .limit(1);
-  if (near.length > 0) {
-    await db
-      .update(planSessions)
-      .set({ status: "completed", completedActivityId: activityId, completedAt: new Date() })
-      .where(eq(planSessions.id, near[0].id));
+      .orderBy(dateDistance, plannedFirst, planSessions.id)
+      .limit(1);
+    return found[0] ?? null;
+  };
+
+  const target =
+    (await findSession(["planned", "missed"], 0)) ??
+    (await findSession(["planned", "missed"], 1)) ??
+    (await findSession(["missed"], 3));
+  if (!target) return;
+
+  await db
+    .update(planSessions)
+    .set({ status: "completed", completedActivityId: activityId, completedAt: new Date(), reason: null })
+    .where(eq(planSessions.id, target.id));
+}
+
+/** Link aktivitas ke sesi rencana lalu antre regenerasi AI (debounce via hasPendingJob). */
+export async function afterActivityCreated(userId: string, activityId: string): Promise<void> {
+  await linkCompletedActivityToPlan(userId, activityId);
+  if (!(await hasPendingJob("regenerate_plan", userId))) {
+    await enqueue(
+      "regenerate_plan",
+      { userId, trigger: "new_activity" },
+      new Date(Date.now() + 10_000)
+    );
   }
 }
